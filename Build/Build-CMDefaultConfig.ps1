@@ -46,7 +46,7 @@ param
 
 )
 
-function Process-Parameters
+function Process-Parameters 
 {
 
 	param
@@ -59,7 +59,7 @@ function Process-Parameters
 
 	$command = ""
 	
-	$Object | Get-Member -Type NoteProperty | % {
+	$Object | Get-Member -Type NoteProperty | ForEach-Object {
 				
 		$paramName = $_.Name				
 		$paramValue = $ExecutionContext.InvokeCommand.ExpandString($Object.$($_.Name))
@@ -105,7 +105,7 @@ function Process-Parameters
 	$command
 }
 
-function Create-DeviceCollectionFolder
+function New-CMFTWDeviceCollectionFolder
 {
 param
 (
@@ -150,12 +150,12 @@ param
             
 			if($FolderInfo.collections)
 			{
-				$FolderInfo.collections | Create-DeviceCollection -Prefix $FolderInfo.prefix -Schedules $Schedules -Path "$($Path)\$($FolderInfo.name)" -TotalCollectionCount ($FolderInfo.collections | Measure-Object).Count
+				$FolderInfo.collections | New-CMFTWDeviceCollection -Prefix $FolderInfo.prefix -Schedules $Schedules -Path "$($Path)\$($FolderInfo.name)" -TotalCollectionCount ($FolderInfo.collections | Measure-Object).Count
 			}
 
 			#if($FolderInfo.devicecollectionfolders)
 			#{
-			#    $FolderInfo.devicecollectionfolders | Create-DeviceCollectionFolder -Path "$($Path)\$($FolderInfo.name)" -Schedules $Schedules
+			#    $FolderInfo.devicecollectionfolders | New-CMFTWDeviceCollectionFolder -Path "$($Path)\$($FolderInfo.name)" -Schedules $Schedules
 			#}
 
         }
@@ -170,7 +170,7 @@ param
     }
 }
 
-function Create-DeviceCollection
+function New-CMFTWDeviceCollection
 {
 param
 (
@@ -199,14 +199,14 @@ param
         
         if($CollectionInfo.name)
         {
-            $refreshType = 'None'
+            #$refreshType = 'None'
             $collection = $null
             $theCollectionName = $ExecutionContext.InvokeCommand.ExpandString("$Prefix$($CollectionInfo.name)")
 
             $collection = (Get-CMDeviceCollection -Name $theCollectionName)
 
 
-            $collectionAlreadyExists = ($collection -ne $null)
+            $collectionAlreadyExists = ($null -ne $collection)
 
             if(-not($collection))
 			{
@@ -287,7 +287,7 @@ param
 				
 				if($CollectionInfo.queryRules)
 				{
-					$CollectionInfo.queryRules | Get-Member -Type NoteProperty | % {
+					$CollectionInfo.queryRules | Get-Member -Type NoteProperty | ForEach-Object {
 						
 						$rule = $ExecutionContext.InvokeCommand.ExpandString($CollectionInfo.queryRules.$($_.Name))
 						
@@ -309,7 +309,7 @@ param
 					
 				if($CollectionInfo.includeRules)
 				{
-					$CollectionInfo.includeRules -split "," | % {
+					$CollectionInfo.includeRules -split "," | ForEach-Object {
 						
 						#$includeCollectionName = ($CollectionInfo.includeRules.$($_.Name))
 
@@ -335,7 +335,7 @@ param
 					
 				if($CollectionInfo.excludeRules)
 				{
-					$CollectionInfo.excludeRules -split "," | % {
+					$CollectionInfo.excludeRules -split "," | ForEach-Object {
 						
 						#$excludeCollectionName = ($CollectionInfo.excludeRules.$($_.Name))
 							
@@ -361,7 +361,7 @@ param
 
 				if($CollectionInfo.directRules)
 				{
-					$CollectionInfo.directRules -split "," | % {
+					$CollectionInfo.directRules -split "," | ForEach-Object {
 						
 						if(Get-CMDeviceCollectionDirectMembershipRule -Collection $collection -ResourceName $_)
                         {
@@ -450,7 +450,7 @@ function Set-ClientSettings
 	}
 }
 
-function Create-ClientSettings
+function New-CMFTWClientSettings
 {
 	param
 	(
@@ -514,7 +514,7 @@ function Create-ClientSettings
 	}
 }
 
-function Create-Schedule
+function New-CMFTWSchedule
 {
 	param
 	(
@@ -556,7 +556,7 @@ function Create-Schedule
     }
 }
 
-function Create-UpdatePackage
+function New-CMFTWUpdatePackage
 {
 	param
 	(
@@ -617,7 +617,7 @@ function Create-UpdatePackage
 	}
 }
 
-function Create-ADRDeployment
+function New-CMFTWADRDeployment
 {
 	param
 	(
@@ -660,7 +660,7 @@ function Create-ADRDeployment
 	}
 }
 
-function Create-ADR
+function New-CMFTWADR
 {
 	param
 	(
@@ -695,7 +695,7 @@ function Create-ADR
 		
 		if($ADRInfo.additionaldeployments)
 		{
-			$ADRInfo.additionaldeployments | Create-ADRDeployment -ADRName $ADRInfo.Name -TotalADRDeploymentCount ($ADRInfo.additionaldeployments | Measure-Object).Count
+			$ADRInfo.additionaldeployments | New-CMFTWADRDeployment -ADRName $ADRInfo.Name -TotalADRDeploymentCount ($ADRInfo.additionaldeployments | Measure-Object).Count
 		}
 	}
 	
@@ -726,21 +726,21 @@ $buildObjects = ($buildConfig | ConvertFrom-Json)
 Push-Location $siteCode":"
 
 $buildObjects.defaultitems.variables | Get-Member -MemberType NoteProperty | `
-    % { Set-Variable -Name $_.Name -Value $buildObjects.defaultitems.variables.($_.Name) }
+    ForEach-Object { Set-Variable -Name $_.Name -Value $buildObjects.defaultitems.variables.($_.Name) }
 
 if($buildObjects.defaultitems.schedules)
 {
-	$schedules = ($buildObjects.defaultitems.schedules | Create-Schedule)
+	$schedules = ($buildObjects.defaultitems.schedules | New-CMFTWSchedule)
 }
 
 if($Collections -eq $true -and $buildObjects.defaultitems.devicecollectionfolders)
 {
-	$buildObjects.defaultitems.devicecollectionfolders | Create-DeviceCollectionFolder -Path "$($siteCode):\DeviceCollection" -Schedules $schedules -TotalFolderCount ($buildObjects.defaultitems.devicecollectionfolders | Measure-Object).Count
+	$buildObjects.defaultitems.devicecollectionfolders | New-CMFTWDeviceCollectionFolder -Path "$($siteCode):\DeviceCollection" -Schedules $schedules -TotalFolderCount ($buildObjects.defaultitems.devicecollectionfolders | Measure-Object).Count
 }
 
 if($ClientSettings -eq $true -and $buildObjects.defaultitems.clientsettings)
 {
-	$buildObjects.defaultitems.clientsettings | Create-ClientSettings -Schedules $schedules -TotalClientSettingsCount ($buildObjects.defaultitems.clientsettings | Measure-Object).Count
+	$buildObjects.defaultitems.clientsettings | New-CMFTWClientSettings -Schedules $schedules -TotalClientSettingsCount ($buildObjects.defaultitems.clientsettings | Measure-Object).Count
 }
 
 if($ADRs -eq $true)
@@ -749,14 +749,14 @@ if($ADRs -eq $true)
 
 	if($buildObjects.defaultitems.updatepackages)
 	{
-		$buildObjects.defaultitems.updatepackages | Create-UpdatePackage -TotalPackageCount ($buildObjects.defaultitems.updatepackages | Measure-Object).Count
+		$buildObjects.defaultitems.updatepackages | New-CMFTWUpdatePackage -TotalPackageCount ($buildObjects.defaultitems.updatepackages | Measure-Object).Count
 	}
 
 	Push-Location $siteCode":"
 
     if($buildObjects.defaultitems.automaticdeploymentrules)
 	{
-		$buildObjects.defaultitems.automaticdeploymentrules | Create-ADR -Schedules $schedules -TotalADRCount ($buildObjects.defaultitems.automaticdeploymentrules | Measure-Object).Count
+		$buildObjects.defaultitems.automaticdeploymentrules | New-CMFTWADR -Schedules $schedules -TotalADRCount ($buildObjects.defaultitems.automaticdeploymentrules | Measure-Object).Count
 	}
 }
 
