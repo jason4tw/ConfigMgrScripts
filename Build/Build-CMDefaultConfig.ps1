@@ -5,10 +5,6 @@
 	.DESCRIPTION
 		Creates Collection Folders, Collections, Client Settings, Update Packages, and Automatic Deployment rules in ConfigMgr using
 a json file where these are all defined.
-
-Version 1.5
-26 September 2018
-Jason Sandys
 	
 	.PARAMETER ConfigFile
 		The input json configuration file to use. If not specified, .\CMDefaultConfig.json is used.
@@ -31,7 +27,15 @@ the membership of collection will not be updated.
 updates the membership of collections defined in the Build-CMDefaultConfig.json configuration file.
 		
 	.NOTES
-		Limitation: Only a single level of folders can be specified or created.
+		Version 1.5
+        Jason Sandys
+
+		Version History
+		- 1.51 (27 September 2018): Added subfolder creation capabilities
+        - 1.5 (26 September 2018): Initial Version
+
+        Limitations and Issues
+		- Does not create json hierarchy for folders.
 #>
 
 [CmdletBinding()]
@@ -136,24 +140,27 @@ param
     
         if($FolderInfo.name)
         {
+			$fullFlderPath = "$($Path)\$($FolderInfo.name)"
+			$folderPath = Split-Path -Path $fullFlderPath
+			$folderName = Split-Path -Leaf -Path $fullFlderPath
 
-			if(-not (Test-Path -Path "$($Path)\$($FolderInfo.name)" -PathType Container))
+			if(-not (Test-Path -Path $fullFlderPath -PathType Container))
 			{
-				Write-Verbose "+ Creating folder named $($_.name) at $Path."
+				Write-Output "+ Creating folder named $folderName at $folderPath."
 
 				if($WhatIf -eq $false)
 				{
-					New-Item -Path $Path -Name $_.name -ItemType Directory
+					New-Item -Path $folderPath -Name $folderName -ItemType Directory
 				}
 			}
 			else
 			{
-				Write-Verbose "= Folder named $($_.name) at $Path already exists."			
+				Write-Output "= Folder named $folderName at $folderPath already exists."			
 			}
             
 			if($FolderInfo.collections)
 			{
-				$FolderInfo.collections | New-CMFTWDeviceCollection -Prefix $FolderInfo.prefix -Schedules $Schedules -Path "$($Path)\$($FolderInfo.name)" -TotalCollectionCount ($FolderInfo.collections | Measure-Object).Count
+				$FolderInfo.collections | New-CMFTWDeviceCollection -Prefix $FolderInfo.prefix -Schedules $Schedules -Path $fullFlderPath -TotalCollectionCount ($FolderInfo.collections | Measure-Object).Count
 			}
 
 			#if($FolderInfo.devicecollectionfolders)
@@ -270,6 +277,16 @@ param
 
 				}
 
+				if((Test-Path -Path $Path -PathType Container))
+				{
+					Write-Output "  -> Moving '$theCollectionName' to $Path."
+
+					if ($WhatIf -eq $false)
+					{
+						Move-CMObject -FolderPath $Path -InputObject $collection
+					}
+				}
+
             }
             else
             {
@@ -278,16 +295,7 @@ param
 
 			if($UpdateMembership -or -not($collectionAlreadyExists))
 			{
-				if((Test-Path -Path $Path -PathType Container) -and ($WhatIf -eq $false))
-				{
-					Move-CMObject -FolderPath $Path -InputObject $collection
-				}
-				else
-				{
-					Write-Output "  -> Moving '$theCollectionName' to $Path."
-				}
-
-				
+	
 				if($CollectionInfo.queryRules)
 				{
 					$CollectionInfo.queryRules | Get-Member -Type NoteProperty | ForEach-Object {

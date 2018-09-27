@@ -14,8 +14,6 @@ members are included in the data file. Members include query, direct, include, a
         The folder to include collections from.
 	.PARAMETER Recurse
         Include sub-folders of the specified folder.	
-	.PARAMETER Folderpath
-        Include the full path to the collection as an attribute of each collection in the output json. This is not used by Build-CMDefaultCollections.ps1.
     .PARAMETER SiteServer
         The name of the primary site server to connect to. By default, the local host will be used.
     .PARAMETER LimitingCollection
@@ -53,8 +51,6 @@ param
     [string]$Folder,
     [Parameter(Mandatory=$False, HelpMessage = 'Recurse sub-folders when dumping collections', ParameterSetName='FolderFilter')]
     [switch]$Recurse,
-    [Parameter(Mandatory=$False, HelpMessage = 'Include Folder path in output json', ParameterSetName='FolderFilter')]
-    [switch]$FolderPath,
     [Parameter(Mandatory=$False, HelpMessage = 'The site server to connect to.', ParameterSetName='FolderFilter')]
     [string]$SiteServer = $env:computername
 
@@ -93,11 +89,6 @@ function Get-CMFTWCollectionMembership
     $collectionObject.limitingCollection = $Collection.LimitToCollectionName
     $collectionObject.schedule = "weekly"
     $collectionObject.incremental = "no"
-
-    if($FolderPath)
-    {
-        $collectionObject.folderPath = $CollectionPath
-    }
 
     $includeRules = New-Object System.Collections.ArrayList("")
     $excludeRules = New-Object System.Collections.ArrayList("")
@@ -149,8 +140,21 @@ function Process-DeviceCollectionsInFolder
         [string]$FolderNodeName
     )
 
+    $folderjson = @"
+    {
+        "name":"",
+        "prefix":"",
+        "collections":[
+        ]
+    }
+"@
+
+    $folderObject = $folderjson | ConvertFrom-Json
+
     $memberCollections = Get-WMIObject -Computer $providerSystem -Namespace $providerNamespace -Class SMS_ObjectContainerItem `
         -Filter "ContainerNodeID='$FolderNodeID' And ObjectType='5000'"
+
+    $folderObject.name = $FolderNodeName
 
     foreach($coll in $memberCollections)
     {
@@ -158,9 +162,12 @@ function Process-DeviceCollectionsInFolder
 
         if($collection.Name -like "$Name")
         {
-            Get-CMFTWCollectionMembership -Collection $collection -CollectionPath $FolderNodeName
+            $collJson = Get-CMFTWCollectionMembership -Collection $collection -CollectionPath $FolderNodeName
+            $folderObject.collections += $collJson
         }
     }
+
+    $outputJson.defaultitems.devicecollectionfolders += $folderObject
 
     if($Recurse)
     {
@@ -207,12 +214,7 @@ function Process-DeviceCollectionsInFolder
 	            }
             ],
             "devicecollectionfolders":[
-                {
-                    "name":"",
-                    "prefix":"",
-                    "collections":[
-                    ]
-                }
+
             ]
         }
     }
