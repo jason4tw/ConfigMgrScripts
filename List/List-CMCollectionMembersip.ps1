@@ -252,11 +252,11 @@ else
 
 if($Output -eq "")
 {
-    $outputJson | ConvertTo-Json -Depth 6
+    $outputJson | ConvertTo-Json -Depth 7
 }
 else
 {
-    $outputJson | ConvertTo-Json -Depth 6 | Out-File -FilePath FileSystem::$Output
+    $outputJson | ConvertTo-Json -Depth 7 | Out-File -FilePath FileSystem::$Output
 }
     
 Pop-Location
