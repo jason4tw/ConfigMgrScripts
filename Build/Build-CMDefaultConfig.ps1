@@ -8,6 +8,7 @@ a json file where these are all defined.
 
 Version 1.5
 26 September 2018
+Jason Sandys
 	
 	.PARAMETER ConfigFile
 		The input json configuration file to use. If not specified, .\CMDefaultConfig.json is used.
@@ -28,7 +29,9 @@ the membership of collection will not be updated.
         .\Build-CMDefaultConfig.ps1 -ConfigFile .\Build-CMDefaultConfig.json -Collections -UpdateMembership
         Creates collections defined in the Build-CMDefaultConfig.json configuration file if they don't already exist and
 updates the membership of collections defined in the Build-CMDefaultConfig.json configuration file.
-        
+		
+	.NOTES
+		Limitation: Only a single level of folders can be specified or created.
 #>
 
 [CmdletBinding()]

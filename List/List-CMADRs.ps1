@@ -1,18 +1,14 @@
 ﻿<#
 	.SYNOPSIS
-		Dumps all Automatic Deployment Rules to formatted console output.
+		Lists all Automatic Deployment Rules to formatted console output.
 	
 	.DESCRIPTION
-		Dumps all Automatic Deployment Rules to formatted console output.
-	
-	.NOTES
+        Lists all Automatic Deployment Rules to formatted console output.
         
-    .VERSION
-        Version 0.5
+Version 0.5
+26 September 2018
+Jason Sandys
 
-    .DATE
-        26 September 2018
-		
 #>
 
 [CmdletBinding()]
@@ -20,7 +16,6 @@ param
 (
 
 )
-
 
 Import-Module (Join-Path (Split-Path $env:SMS_ADMIN_UI_PATH –parent) ConfigurationManager.psd1)
 $siteCode = Get-PSDrive -PSProvider CMSITE
