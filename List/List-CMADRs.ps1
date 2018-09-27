@@ -5,10 +5,16 @@
 	.DESCRIPTION
         Lists all Automatic Deployment Rules to formatted console output.
         
-Version 0.5
-26 September 2018
-Jason Sandys
+.NOTES
+        Version 0.5
+        Jason Sandys
 
+        Version History
+        - 1.0 (26 September 2018): Initial Version
+
+        Limitations and Issues
+        - Only produces formatted console output.
+        
 #>
 
 [CmdletBinding()]
