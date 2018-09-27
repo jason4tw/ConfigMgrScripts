@@ -10,7 +10,7 @@ Version 1.5
 26 September 2018
 	
 	.PARAMETER ConfigFile
-		The input json configuration file to use. If not specified, .\Build-CMDefaultConfig.json is used.
+		The input json configuration file to use. If not specified, .\CMDefaultConfig.json is used.
 	.PARAMETER Collections
         Process and create or update collections defined in the configuration file.
 	.PARAMETER ClientSettings
@@ -37,7 +37,7 @@ param
 	[Parameter(HelpMessage = 'The configuration file to use.')]
 	[ValidateScript({ Test-Path -PathType Leaf -Path $_ })]
 	[Alias('config')]
-	[string]$ConfigFile = '.\Build-CMDefaultConfig.json',
+	[string]$ConfigFile = '.\CMDefaultConfig.json',
 	[switch]$Collections,
 	[switch]$ClientSettings,
 	[switch]$ADRs,
