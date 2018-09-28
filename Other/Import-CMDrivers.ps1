@@ -24,7 +24,7 @@ This location and the dirvers in it should be considered imutable once the drive
         .\Import-CMDrivers.ps1 -Model 8020 -Vendor Dell -Architecure x64 -ImportSource \\cm301\ConfigMgr\Import\Drivers\Dell\8020\x64 -PackageSourceRoot \\cm301\ConfigMgr\Content\Drivers
 
     .NOTES
-        Version 1.1
+        Version 1.1.1
         Jason Sandys
 
         Version History
@@ -32,8 +32,10 @@ This location and the dirvers in it should be considered imutable once the drive
         - 1.1 (28 Septmeber 2018): Corrected OS validation syntax error.
                                     Fixed script to preroply add drivers to package.
                                     Removed old, stale code.
+        - 1.1.1 (28 September 2018): Fixed order of file enumeration and chaging to the CM provider drive
 
         Limitations and Issues
+        - Does not create folders for drivers (yet)
        
 #>
 
@@ -71,10 +73,10 @@ If (Get-Item $ImportSource -ErrorAction SilentlyContinue)
 
     $PSD = Get-PSDrive -PSProvider CMSite
 
-    Push-Location "$($PSD):"
-
     # Get driver files
     $infFiles = Get-ChildItem -Path $ImportSource -Recurse -Filter "*.inf"
+    
+    Push-Location "$($PSD):"
 
     $driverPackage = Get-CMDriverPackage -Name $packageName
 
