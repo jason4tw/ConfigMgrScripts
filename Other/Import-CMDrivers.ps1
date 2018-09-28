@@ -24,11 +24,14 @@ This location and the dirvers in it should be considered imutable once the drive
         .\Import-CMDrivers.ps1 -Model 8020 -Vendor Dell -Architecure x64 -ImportSource \\cm301\ConfigMgr\Import\Drivers\Dell\8020\x64 -PackageSourceRoot \\cm301\ConfigMgr\Content\Drivers
 
     .NOTES
-        Version 1.0
+        Version 1.1
         Jason Sandys
 
         Version History
         - 1.0 (28 September 2018): Initial Version
+        - 1.1 (28 Septmeber 2018): Corrected OS validation syntax error.
+                                    Fixed script to preroply add drivers to package.
+                                    Removed old, stale code.
 
         Limitations and Issues
        
@@ -40,7 +43,7 @@ Param
    [Parameter(Mandatory=$true)]
         [string]$Model,
    [Parameter(Mandatory=$true)]
-        [ValidateSet("Win7","Win8,Win10")] 
+        [ValidateSet("Win7","Win8","Win10")] 
         [string]$OS,   
    [Parameter(Mandatory=$true)]
         [ValidateSet("HP","Lenovo","Dell","Panasonic")] 
@@ -63,17 +66,15 @@ Write-Host "Checking for " $ImportSource
 
 If (Get-Item $ImportSource -ErrorAction SilentlyContinue)
 {
-    $presentLocation = (Get-Location)
-
-    # Get driver files
-    $infFiles = Get-ChildItem -Path $ImportSource -Recurse -Filter "*.inf"
-
     # Import ConfigMgr module
     Import-Module ($Env:SMS_ADMIN_UI_PATH.Substring(0,$Env:SMS_ADMIN_UI_PATH.Length-5) + '\ConfigurationManager.psd1')
 
     $PSD = Get-PSDrive -PSProvider CMSite
 
     Push-Location "$($PSD):"
+
+    # Get driver files
+    $infFiles = Get-ChildItem -Path $ImportSource -Recurse -Filter "*.inf"
 
     $driverPackage = Get-CMDriverPackage -Name $packageName
 
@@ -98,7 +99,6 @@ If (Get-Item $ImportSource -ErrorAction SilentlyContinue)
         }
 
         $driverPackage = New-CMDriverPackage -Name $packageName -Path $packageSourceLocation
-        #Get-CMDriverPackage -Name $packageName
     }
 
     $modelCategory = Get-CMCategory -Name $Model
@@ -134,29 +134,19 @@ If (Get-Item $ImportSource -ErrorAction SilentlyContinue)
     $totalInfCount = $infFiles.count
     $driverCounter = 0
 
-    $driversIds = @()
-    $driverSourcePaths = @()
-        
     foreach($driverFile in $infFiles)
     {
-        Write-Progress -Id 1 -Activity "Importing Drivers" -CurrentOperation "Importing: $($driverFile.Name)" -Status "($($driverCounter + 1) of $totalInfCount)" -PercentComplete ($driverCounter++ / $totalInfCount * 100)
+        Write-Progress -Id 1 -Activity "Importing Drivers" -CurrentOperation "Importing: `"$($driverFile.Name)`"" -Status "($($driverCounter + 1) of $totalInfCount)" -PercentComplete ($driverCounter++ / $totalInfCount * 100)
         Write-Output $driverFile.FullName
             
         try
         {
-            $importedDriver = (Import-CMDriver -UncFileLocation $driverFile.FullName -ImportDuplicateDriverOption AppendCategory -EnableAndAllowInstall $True -AdministrativeCategory $categories -UpdateDistributionPointsforDriverPackage $False | Select *)
-            #$importedDriver = (Import-CMDriver -UncFileLocation $driverFile.FullName -ImportDuplicateDriverOption AppendCategory -EnableAndAllowInstall $True -AdministrativeCategory $categories -DriverPackage $driverPackage -UpdateDistributionPointsforDriverPackage $False | Select *)
+            $importedDriver = Import-CMDriver -UncFileLocation $driverFile.FullName -ImportDuplicateDriverOption AppendCategory -EnableAndAllowInstall $True -AdministrativeCategory $categories -UpdateDistributionPointsforDriverPackage $False
             
             if($importedDriver)
             {
-               #Write-Progress -Id 1 -Activity "Importing Drivers" -CurrentOperation "Adding to `"$packageName`" driver package: $($driverFile.Name):" -Status "($driverCounter of $totalInfCount)" -PercentComplete ($driverCounter / $totalInfCount * 100)
-               # Add-CMDriverToDriverPackage -DriverId $importedDriverID -DriverPackageName $packageName
-
-               $driverContent = Get-WmiObject -Namespace "root\sms\site_$($PSD)" -class SMS_CIToContent -Filter "CI_ID='$($importedDriver.CI_ID)'"
-
-               $driversIds += $driverContent.ContentID
-               $driverSourcePaths += $importedDriver.ContentSourcePath
-
+               Write-Progress -Id 1 -Activity "Importing Drivers" -CurrentOperation "Adding `"$($driverFile.Name)`" to package: `"$packageName`"" -Status "($driverCounter of $totalInfCount)" -PercentComplete ($driverCounter / $totalInfCount * 100)
+               Add-CMDriverToDriverPackage -Driver $importedDriver -DriverPackageName $packageName
             }
         }
         catch
@@ -166,20 +156,11 @@ If (Get-Item $ImportSource -ErrorAction SilentlyContinue)
 
     Write-Progress -Id 1 -Activity "Importing Drivers" -Completed
 
-    #$rawDriverPackage = Get-WmiObject -Namespace "root\sms\site_$($PSD)" -ClassName SMS_DriverPackage -Filter "PackageID='$($driverPackage.PackageID)'"
+    Pop-Location
 
-    #$result = $rawDriverPackage.AddDriverContent($driversIds, $driverSourcePaths, $false)
-
-    #if($result.ReturnValue -ne 0)
-    #{
-    #     Write-Error "Could not import: $($result.ReturnValue)."
-    #}
-
-    Set-Location $presentLocation
 }
 else
 {
     Write-Warning "Driver Source not found. Cannot continue"
 }
 
-Pop-Location
