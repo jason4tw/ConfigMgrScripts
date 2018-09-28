@@ -10,7 +10,7 @@
         Jason Sandys
 
         Version History
-        - 1.0 (26 September 2018): Initial Version
+        - 0.5 (26 September 2018): Initial Pre-release Version
 
         Limitations and Issues
         - Only produces formatted console output.
