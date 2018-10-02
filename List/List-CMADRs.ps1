@@ -6,11 +6,12 @@
         Lists all Automatic Deployment Rules to formatted console output.
         
 .NOTES
-        Version 0.5
+        Version 0.5.1
         Jason Sandys
 
         Version History
         - 0.5 (26 September 2018): Initial Pre-release Version
+        - 0.5.1 (2 October 2018): Fixed weekday name issue.
 
         Limitations and Issues
         - Only produces formatted console output.
@@ -66,7 +67,7 @@ foreach($adr in $allAdrs)
                 $week = "Fifth"
             }
 
-            Write-Output "   - Day: $week $((Get-Culture).DateTimeFormat.GetDayName($sched.Day))"
+            Write-Output "   - Day: $week $((Get-Culture).DateTimeFormat.GetDayName($sched.Day - 1))"
             Write-Output "   - Recur every $($sched.ForNumberOfMonths) month(s)"
         }
         elseif($sched.SmsProviderObjectPath -eq "SMS_ST_RecurInterval")
@@ -86,7 +87,7 @@ foreach($adr in $allAdrs)
         }
         elseif($sched.SmsProviderObjectPath -eq "SMS_ST_RecurWeekly")
         {
-            Write-Output "   - Day: $((Get-Culture).DateTimeFormat.GetDayName($sched.Day))"
+            Write-Output "   - Day: $((Get-Culture).DateTimeFormat.GetDayName($sched.Day - 1))"
             Write-Output "   - Recur every $($sched.ForNumberOfWeeks) week(s)"            
         }
     }
