@@ -65,6 +65,9 @@
 ' 1.82		Updated log file handling when moving the log file to ccm/logs. If a log file for the script
 '				already exists in ccm/logs, it will be renamed to include the date and time and then the new
 '				log will be copied in.
+' 1.83		Update CacheSize checking so that a default value is no longer forced during client agent install, 
+'			reinstall, or during any run of the script if the option is ommited from the configuratin file or
+'			set to zero.
 
 Option Explicit
 
@@ -95,7 +98,7 @@ Const DEFAULT_LOCALADMIN_GROUP = 			"Administrators"
 Const DEFAULT_AGENTVERSION =				"4.00.6487.2000"
 Const DEFAULT_UAGENTVERSION =				"0.00.0000.0000"
 Const DEFAULT_RUN_INTERVAL =				12
-Const DEFAULT_CACHESIZE =					"5120"
+Const DEFAULT_CACHESIZE =					"0"
 
 Const DEFAULT_REGISTRY_LASTRUN_VALUE =		"Last Run"
 Const DEFAULT_REGISTRY_LOGLOCATION_VALUE =	"Log Location"
@@ -297,7 +300,7 @@ Sub Main
 						If Not InstallClient(configOptions, msiProperties, ccmsetupParams) Then
 							clientError = True
 						End If				
-					Else
+					Else If options.Exists(OPTION_CACHESIZE) Then
 						CheckCache configOptions
 					End If
 				Else
@@ -1363,8 +1366,8 @@ Sub CheckCache(ByRef options)
 	On Error Goto 0
 	
 	If errorCode <> 0 Then
-	   	WriteLogMsg MSG_CHECKCACHE_CREATEFAIL & errorMsg, 2, 1, 0
-	    Exit Sub
+		WriteLogMsg MSG_CHECKCACHE_CREATEFAIL & errorMsg, 2, 1, 0
+		Exit Sub
 	End If
 	
 	On Error Resume Next
@@ -1378,14 +1381,14 @@ Sub CheckCache(ByRef options)
 	On Error Goto 0
 
 	If errorCode <> 0 Then
-	   Set uiResManager = Nothing
-	   WriteLogMsg MSG_CHECKCACHE_CACHEFAIL & errorMsg, 2, 1, 0
-	   Exit sub
+		Set uiResManager = Nothing
+		WriteLogMsg MSG_CHECKCACHE_CACHEFAIL & errorMsg, 2, 1, 0
+		Exit sub
 	End If
 	
 	WriteLogMsg MSG_CHECKCACHE_SIZEIS & cache.TotalSize, 1, 1, 0
 
-	If cache.TotalSize <> desiredCacheSize Then
+	If desiredCacheSize > 0 And cache.TotalSize <> desiredCacheSize Then
 
 		On Error Resume Next
 		Err.Clear
@@ -1398,9 +1401,9 @@ Sub CheckCache(ByRef options)
 		On Error Goto 0
 	
 		If errorCode <> 0 Then
-		   Set uiResManager = Nothing
-		   WriteLogMsg MSG_CHECKCACHE_CACHEFAIL & errorMsg, 2, 1, 0
-		   Exit Sub
+			Set uiResManager = Nothing
+			WriteLogMsg MSG_CHECKCACHE_CACHEFAIL & errorMsg, 2, 1, 0
+			Exit Sub
 		End If		
 	
 		WriteLogMsg MSG_CHECKCACHE_SETSIZE & desiredCacheSize, 1, 1, 0
@@ -1408,7 +1411,7 @@ Sub CheckCache(ByRef options)
 		WriteLogMsg MSG_CHECKCACHE_SIZEOK, 1, 1, 0
 	End If
 
-    Set uiResManager = Nothing
+	Set uiResManager = Nothing
 
 End Sub
 
@@ -1722,8 +1725,10 @@ Function InstallClient(ByRef options, ByRef properties, ByRef parameters)
 			
 		Next
 
-		commandLine = commandLine & " SMSCACHESIZE=" & cacheSize
-		
+		If cacheSize > 0 Then
+			commandLine = commandLine & " SMSCACHESIZE=" & cacheSize
+		End If
+
 		If options.Exists(OPTION_SITECODE) Then
 			commandLine = commandLine & " SMSSITECODE=" & options.Item(OPTION_SITECODE)
 		End If
