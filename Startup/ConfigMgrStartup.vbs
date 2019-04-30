@@ -1,5 +1,5 @@
 ' ConfigMgr Startup Script
-' Version 1.83
+' Version 1.84
 ' Jason Sandys
 ' https://home.configmgrftw.com
 '
@@ -68,6 +68,8 @@
 ' 1.83		Update CacheSize checking so that a default value is no longer forced during client agent install, 
 '			reinstall, or during any run of the script if the option is ommited from the configuratin file or
 '			set to zero.
+' 1.84		Fixed two typo bugs
+'			Renamed script file to not include the version number
 
 Option Explicit
 
@@ -300,7 +302,7 @@ Sub Main
 						If Not InstallClient(configOptions, msiProperties, ccmsetupParams) Then
 							clientError = True
 						End If				
-					Else If options.Exists(OPTION_CACHESIZE) Then
+					ElseIf configOptions.Exists(OPTION_CACHESIZE) Then
 						CheckCache configOptions
 					End If
 				Else
