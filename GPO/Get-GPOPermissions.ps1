@@ -1,7 +1,4 @@
 ﻿$allGpos = Get-GPO -All
-#$allGpos = Get-GPO -Name 'CC-W10-Allow WinRM Client Basic Authentication'
-#$allGpos = Get-GPO -Name 'CC-W10a-IE Configuration'
-#$allGpos = Get-GPO -Name 'CC-W10-1709-Configuration'
 
 $gpoTotalCount = $allGpos.Count
 $gpoCounter = 0
