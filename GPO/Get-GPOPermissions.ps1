@@ -28,7 +28,15 @@ foreach($gpo in $allGpos)
 
         $trusteeType = [string]$permission.Trustee.SidType
 
-        $trustees += New-Object -TypeName PSObject -Property @{Trustee=$permission.Trustee.Name; TrusteeType=$trusteeType}
+        $thisTrustee = New-Object -TypeName PSObject -Property @{Trustee=$permission.Trustee.Name; TrusteeType=$trusteeType}
+ 
+        if($trusteeType -eq 'Group')
+        {
+            $memberCount = (Get-ADGroupMember -Identity $permission.Trustee.Name).Count
+            $thisTrustee | Add-Member -MemberType NoteProperty -Name 'MemberCount' -Value $memberCount
+        }
+ 
+        $trustees += $thisTrustee
 
         $count = 0
 
