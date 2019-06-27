@@ -32,7 +32,7 @@ foreach($gpo in $allGpos)
  
         if($trusteeType -eq 'Group')
         {
-            $memberCount = (Get-ADGroupMember -Identity $permission.Trustee.Name).Count
+            $memberCount = (Get-ADGroupMember -Identity $permission.Trustee.Name -Properties Member | Select-Object -ExpandProperty Member).Count
             $thisTrustee | Add-Member -MemberType NoteProperty -Name 'MemberCount' -Value $memberCount
         }
  
