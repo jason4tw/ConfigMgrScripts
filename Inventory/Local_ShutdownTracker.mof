@@ -1,0 +1,19 @@
+#pragma namespace("\\\\.\\root\\cimv2")
+
+[Union,ViewSources{"select RecordNumber,SourceName,EventCode,Message,TimeGenerated,LogFile from Win32_NTLogEvent where (SourceName='EventLog' and (EventCode=6006 or EventCode=6008)) or (SourceName='USER32' and EventCode=1074)"},ViewSpaces{"\\\\.\\root\\cimv2"},
+dynamic,Provider("MS_VIEW_INSTANCE_PROVIDER")]
+class Local_ShutdownTracker
+{
+    [PropertySources{"RecordNumber"}, key]
+	uint32          RecordNumber;
+    [PropertySources{"LogFile"}, key]
+	string			LogFile;
+    [PropertySources{"SourceName"}]
+	string          SourceName;
+    [PropertySources{"EventCode"}]
+	uint16          EventCode;
+    [PropertySources{"Message"}]
+	string          Message;
+    [PropertySources{"TimeGenerated"}]
+	datetime		TimeGenerated;
+};
