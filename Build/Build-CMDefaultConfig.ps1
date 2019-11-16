@@ -1,11 +1,11 @@
-﻿<#
+<#
 	.SYNOPSIS
 		Creates standard objects and configurations in ConfigMgr from a supplied json configuration file.
-	
+
 	.DESCRIPTION
 		Creates Collection Folders, Collections, Client Settings, Update Packages, and Automatic Deployment rules in ConfigMgr using
 a json file where these are all defined.
-	
+
 	.PARAMETER ConfigFile
 		The input json configuration file to use. If not specified, .\CMDefaultConfig.json is used.
 	.PARAMETER Collections
@@ -13,7 +13,7 @@ a json file where these are all defined.
 	.PARAMETER ClientSettings
         Create Client Settings Packages defined in the configuration file.
 	.PARAMETER ADRs
-        Create Automatic Deployment Rules defined in the configuration file.	
+        Create Automatic Deployment Rules defined in the configuration file.
 	.PARAMETER UpdateMembership
         Update the membership of existing collections specified in the configuration file. If this is not specified and the collection already exists,
 the membership of collection will not be updated.
@@ -25,7 +25,7 @@ the membership of collection will not be updated.
         .\Build-CMDefaultConfig.ps1 -ConfigFile .\Build-CMDefaultConfig.json -Collections -UpdateMembership
         Creates collections defined in the Build-CMDefaultConfig.json configuration file if they don't already exist and
 updates the membership of collections defined in the Build-CMDefaultConfig.json configuration file.
-		
+
 	.NOTES
 		Version 1.5
         Jason Sandys
@@ -53,7 +53,7 @@ param
 
 )
 
-function Process-Parameters 
+function Process-Parameters
 {
 
 	param
@@ -65,34 +65,41 @@ function Process-Parameters
 	)
 
 	$command = ""
-	
+
 	$Object | Get-Member -Type NoteProperty | ForEach-Object {
-				
-		$paramName = $_.Name				
+
+		$paramName = $_.Name
 		$paramValue = $ExecutionContext.InvokeCommand.ExpandString($Object.$($_.Name))
-		
+
 		$paramValue = $paramValue.Trim()
-		
+
 		if($paramValue -and $paramValue -ne "" -and -not ($ExcludeParams -contains $paramName))
 		{
 			if ($paramValue -ieq 'true' -or $paramValue -ieq 'false')
 			{
 				$command += " -$($paramName) `$$paramValue"
 			}
-			
+
 			elseif ($paramName -ieq 'schedule')
 			{
 				$command += " -$($paramName) `$Schedules.Get_Item(`"$paramValue`")"
 			}
-			
+
 			elseif ($paramName -ieq 'type')
 			{
 				$command += " -$($paramValue)"
 			}
-			
+
 			elseif ($paramName -ieq 'start')
 			{
-				$command += " -$($paramName) '$(Get-Date -Date((Get-Date).ToString('yyyy-MM-dd' + 'T' + $paramValue)))'"
+                if($paramValue -match "^\d\d:\d\d$")
+                {
+                    #Only specified hour and minutes for schedule, using today's date.
+                    [string]$startTime = (Get-Date -Date((Get-Date).ToString('yyyy-MM-dd' + 'T' + $paramValue))).ToString()
+                }else{
+                    [string]$startTime = ([datetime]$paramValue).ToString()
+                }
+				$command += " -$($paramName) '$startTime'"
 			}
 
 			elseif ($paramName -ine 'name' -or -not $ExcludeNameParam)
@@ -106,9 +113,14 @@ function Process-Parameters
 					$command += " -$($paramName) $paramValue"
 				}
 			}
-		}
+		}else
+        {
+            if($paramName -eq "NonRecurring"){
+                $command += " -$($paramName)"
+            }
+        }
 	}
-	
+
 	$command
 }
 
@@ -122,7 +134,7 @@ param
     [Hashtable] $Schedules,
     [Parameter(Mandatory=$true,ValueFromPipeline)]
     [PSCustomObject] $FolderInfo,
-    [int] $TotalFolderCount 
+    [int] $TotalFolderCount
 )
 
     begin
@@ -137,7 +149,7 @@ param
             Write-Progress -Activity "Creating Device Collection Folders" -Status "$fldrCount of $TotalFolderCount" -CurrentOperation $FolderInfo.name `
                 -PercentComplete ($fldrCount++ / $TotalFolderCount * 100) -Id 1
         }
-    
+
         if($FolderInfo.name)
         {
 			$fullFlderPath = "$($Path)\$($FolderInfo.name)"
@@ -155,18 +167,18 @@ param
 			}
 			else
 			{
-				Write-Output "= Folder named $folderName at $folderPath already exists."			
+				Write-Output "= Folder named $folderName at $folderPath already exists."
 			}
-            
+
 			if($FolderInfo.collections)
 			{
 				$FolderInfo.collections | New-CMFTWDeviceCollection -Prefix $FolderInfo.prefix -Schedules $Schedules -Path $fullFlderPath -TotalCollectionCount ($FolderInfo.collections | Measure-Object).Count
 			}
-
-			#if($FolderInfo.devicecollectionfolders)
-			#{
-			#    $FolderInfo.devicecollectionfolders | New-CMFTWDeviceCollectionFolder -Path "$($Path)\$($FolderInfo.name)" -Schedules $Schedules
-			#}
+			#Uncommenting the next 4 lines allowed me to nest device collection folders just fine, not sure why they were commented in the first place.
+			if($FolderInfo.devicecollectionfolders)
+			{
+			    $FolderInfo.devicecollectionfolders | New-CMFTWDeviceCollectionFolder -Path "$($Path)\$($FolderInfo.name)" -Schedules $Schedules
+			}
 
         }
     }
@@ -176,6 +188,61 @@ param
         if($TotalFolderCount)
         {
             Write-Progress -Activity "Creating Device Collection Folders" -Completed -Id 1
+        }
+    }
+}
+
+#Allows the creation of maintenance windows for specific device collections with the JSON file
+function New-CMFTWMaintenanceWindow
+{
+param
+(
+    [Parameter(Mandatory=$true)]
+    [Hashtable] $Schedules,
+    [Parameter(Mandatory=$true,ValueFromPipeline)]
+    [PSCustomObject] $MWInfo,
+    [int] $TotalMWCount
+)
+    begin
+    {
+        $MWCount = 1
+    }
+
+    process
+    {
+        if($TotalMWCount)
+        {
+            Write-Progress -Activity "Creating or Updating Collections" -Status "$MWCount of $TotalMWCount" -CurrentOperation $MWInfo.name `
+                -PercentComplete ($MWCount++ / $TotalMWCount * 100) -Id 2 -ParentId 1
+        }
+
+        if($MWInfo.Name)
+        {
+            if(($null -ne $MWInfo.schedule) -and ($Schedules.ContainsKey($MWInfo.schedule)))
+            {
+                $theSchedule = $Schedules.Get_Item($MWInfo.schedule)
+                if(($null -ne $MWInfo.collectionname) -and ($null -ne $theSchedule))
+                {
+                    $currentMaintenanceWindows = Get-CMMaintenanceWindow -CollectionName $($MWInfo.CollectionName) | Select-Object -ExpandProperty Name
+
+                    if($currentMaintenanceWindows -notcontains $($MWInfo.Name))
+                    {
+
+
+                        $commandline = Process-Parameters -Object $MWInfo
+                        Write-Output " + Creating maintenance window named '$($MWInfo.Name)' for collection '$($MWInfo.CollectionName)'"
+                        $commandline = "New-CMMaintenanceWindow $commandline"
+			            Invoke-Expression -Command $commandline
+
+                    }else
+                    {
+                        Write-Output " = A maintenance window named '$($MWInfo.Name)' already exists for collection '$($MWInfo.CollectionName)'."
+                    }
+                }
+            }else
+            {
+                Write-Output " ! Could not find a schedule named '$($MWInfo.schedule)' in the hash table, skipping maintenance windows creation."
+            }
         }
     }
 }
@@ -192,7 +259,7 @@ param
     [Hashtable] $Schedules,
     [Parameter(Mandatory=$true,ValueFromPipeline)]
     [PSCustomObject] $CollectionInfo,
-    [int] $TotalCollectionCount     
+    [int] $TotalCollectionCount
 )
     begin
     {
@@ -206,7 +273,7 @@ param
             Write-Progress -Activity "Creating or Updating Collections" -Status "$collCount of $TotalCollectionCount" -CurrentOperation $CollectionInfo.name `
                 -PercentComplete ($collCount++ / $TotalCollectionCount * 100) -Id 2 -ParentId 1
         }
-        
+
         if($CollectionInfo.name)
         {
             #$refreshType = 'None'
@@ -220,7 +287,7 @@ param
 
             if(-not($collection))
 			{
-			
+
 				$limitingCollectionID = (Get-CMDeviceCollection -Name $CollectionInfo.limitingCollection).CollectionID
 
 				if(-not ($limitingCollectionID))
@@ -232,16 +299,16 @@ param
 						$limitingCollectionID = 'SMS00001'
 					}
 				}
-			
-				if($Schedules.ContainsKey($CollectionInfo.schedule))
+
+				if(($null -ne $CollectionInfo.schedule) -and ($Schedules.ContainsKey($CollectionInfo.schedule)))
 				{
 					if($CollectionInfo.incremental -eq 'yes')
 					{
-						$refreshType = 'Both'   
+						$refreshType = 'Both'
 					}
-					else 
+					else
 					{
-						$refreshType = 'Periodic'    
+						$refreshType = 'Periodic'
 					}
 
 					Write-Output " + Creating collection named '$theCollectionName' limited to $limitingCollectionID."
@@ -259,7 +326,7 @@ param
 				{
 					if($CollectionInfo.incremental -eq 'yes')
 					{
-						$refreshType = 'Continuous'    
+						$refreshType = 'Continuous'
 					}
 					else
 					{
@@ -295,13 +362,13 @@ param
 
 			if($UpdateMembership -or -not($collectionAlreadyExists))
 			{
-	
+
 				if($CollectionInfo.queryRules)
 				{
 					$CollectionInfo.queryRules | Get-Member -Type NoteProperty | ForEach-Object {
-						
+
 						$rule = $ExecutionContext.InvokeCommand.ExpandString($CollectionInfo.queryRules.$($_.Name))
-						
+
 						if(Get-CMDeviceCollectionQueryMembershipRule -Collection $collection -RuleName $_.Name)
                         {
                             Write-Output " = Query rule for '$theCollectionName': $($_.Name) already exists."
@@ -317,54 +384,56 @@ param
                         }
 					}
 				}
-					
+
 				if($CollectionInfo.includeRules)
 				{
-					$CollectionInfo.includeRules -split "," | ForEach-Object {
-						
-						#$includeCollectionName = ($CollectionInfo.includeRules.$($_.Name))
+                    $CollectionInfo.includeRules | Get-Member -Type NoteProperty | ForEach-Object {
 
-                        if(-not(Get-CMDeviceCollection -Name $_))
+						$includeCollectionName = $ExecutionContext.InvokeCommand.ExpandString($CollectionInfo.includeRules.$($_.Name))
+
+                        if(-not(Get-CMDeviceCollection -Name $includeCollectionName))
                         {
-                            Write-Output " x The collecton $_ does not exist  and cannot be included in $theCollectionName."
+                            Write-Output " x The collecton $includeCollectionName does not exist  and cannot be included in $theCollectionName."
                         }
-                        elseif(Get-CMDeviceCollectionIncludeMembershipRule -Collection $collection -IncludeCollectionName $_)
+                        elseif(Get-CMDeviceCollectionIncludeMembershipRule -Collection $collection -IncludeCollectionName $includeCollectionName)
                         {
-                            Write-Output " = Include rule for '$theCollectionName': $_ already exists."
+                            Write-Output " = Include rule for '$theCollectionName': $includeCollectionName already exists."
                         }
                         else
                         {
-						    Write-Output " + Creating new include rule for '$theCollectionName': $_"
-						
+						    Write-Output " + Creating new include rule for '$theCollectionName': $includeCollectionName"
+
 						    if($WhatIf -eq $false)
 						    {
-							    Add-CMDeviceCollectionIncludeMembershipRule -Collection $collection -IncludeCollectionName $_
+							    Add-CMDeviceCollectionIncludeMembershipRule -Collection $collection -IncludeCollectionName $includeCollectionName
 						    }
                         }
 					}
 				}
-					
+
 				if($CollectionInfo.excludeRules)
 				{
-					$CollectionInfo.excludeRules -split "," | ForEach-Object {
-						
+					#$CollectionInfo.excludeRules -split "," | ForEach-Object {
+					$CollectionInfo.excludeRules | Get-Member -Type NoteProperty | ForEach-Object {
+
 						#$excludeCollectionName = ($CollectionInfo.excludeRules.$($_.Name))
-							
-						if(-not(Get-CMDeviceCollection -Name $_))
+                        $excludeCollectionName = $ExecutionContext.InvokeCommand.ExpandString($CollectionInfo.excludeRules.$($_.Name))
+
+						if(-not(Get-CMDeviceCollection -Name $excludeCollectionName))
                         {
-                            Write-Output " x The collecton $_ does not exist and cannot be excluded from $theCollectionName."
+                            Write-Output " x The collecton $excludeCollectionName does not exist and cannot be excluded from $theCollectionName."
                         }
-                        elseif(Get-CMDeviceCollectionExcludeMembershipRule -Collection $collection -ExcludeCollectionName $_)
+                        elseif(Get-CMDeviceCollectionExcludeMembershipRule -Collection $collection -ExcludeCollectionName $excludeCollectionName)
                         {
-                            Write-Output " = Exclude rule for '$theCollectionName': $_ already exists."
+                            Write-Output " = Exclude rule for '$theCollectionName': $excludeCollectionName already exists."
                         }
                         else
                         {
-                            Write-Output " + Creating new exclude rule for '$theCollectionName': $_"
-						
+                            Write-Output " + Creating new exclude rule for '$theCollectionName': $excludeCollectionName"
+
 						    if($WhatIf -eq $false)
 						    {
-							    Add-CMDeviceCollectionExcludeMembershipRule -Collection $collection -ExcludeCollectionName $_
+							    Add-CMDeviceCollectionExcludeMembershipRule -Collection $collection -ExcludeCollectionName $excludeCollectionName
 						    }
                         }
 					}
@@ -373,7 +442,7 @@ param
 				if($CollectionInfo.directRules)
 				{
 					$CollectionInfo.directRules -split "," | ForEach-Object {
-						
+
 						if(Get-CMDeviceCollectionDirectMembershipRule -Collection $collection -ResourceName $_)
                         {
                             Write-Output " = Direct rule for '$theCollectionName': $_ already exists."
@@ -381,7 +450,7 @@ param
                         else
                         {
                             $res = (Get-CMDevice -Name $_)
-                            
+
                             if(-not($res))
                             {
                                 Write-Output " x The resource '$_' does not exist"
@@ -389,7 +458,7 @@ param
                             else
                             {
                                 Write-Output " + Creating new direct rule for '$theCollectionName': $_"
-						
+
 						        if($WhatIf -eq $false)
 						        {
 							        Add-CMDeviceCollectionDirectMembershipRule -Collection $collection -Resource $res
@@ -398,6 +467,12 @@ param
                         }
 					}
 				}
+
+                if($CollectionInfo.comment)
+                {
+                    Write-Output " + Setting collection comment to `"$($CollectionInfo.comment)`""
+                    Set-CMDeviceCollection -InputObject $collection -Comment "$($CollectionInfo.comment)"
+                }
 			}
         }
 
@@ -421,14 +496,14 @@ function Set-ClientSettings
 		[Hashtable] $Schedules,
 		[Parameter(Mandatory=$true,ValueFromPipeline)]
 		[PSCustomObject] $ClientSettingsItemInfo,
-		[int] $TotalClientSettingsItemCount 
+		[int] $TotalClientSettingsItemCount
 	)
 
 	begin
 	{
 		$csiCount = 0
 	}
-	
+
 	process
 	{
 		if($TotalClientSettingsItemCount)
@@ -436,12 +511,12 @@ function Set-ClientSettings
             Write-Progress -Activity "Setting Client Settings" -Status "$csCount of $TotalClientSettingsItemCount" -CurrentOperation $ClientSettingsItemInfo.type `
                 -PercentComplete ($csiCount++ / $TotalClientSettingsItemCount * 100) -Id 2 -ParentId 1
         }
-		
+
 		if($ClientSettingsItemInfo.type)
 		{
-		
+
 			$commandline = Process-Parameters -Object $ClientSettingsItemInfo
-						
+
 			Write-Output "  + Updating client settings '$($ClientSettingsItemInfo.type)': $commandline"
 
 			if($WhatIf -eq $false)
@@ -469,14 +544,14 @@ function New-CMFTWClientSettings
 		[Hashtable] $Schedules,
 		[Parameter(Mandatory=$true,ValueFromPipeline)]
 		[PSCustomObject] $ClientSettingsInfo,
-		[int] $TotalClientSettingsCount 
+		[int] $TotalClientSettingsCount
 	)
 
 	begin
 	{
 		$csCount = 0
 	}
-	
+
 	process
 	{
 		if($TotalClientSettingsCount)
@@ -484,12 +559,12 @@ function New-CMFTWClientSettings
             Write-Progress -Activity "Creating, Configuring, and Deploying Client Settings" -Status "$csCount of $TotalClientSettingsCount" -CurrentOperation $ClientSettingsInfo.name `
                 -PercentComplete ($csCount++ / $TotalClientSettingsCount * 100) -Id 1
         }
-		
+
 		if($ClientSettingsInfo.name)
 		{
-	
+
 			if(-not (Get-CMClientSetting -name $ClientSettingsInfo.name))
-			{	
+			{
 				Write-Output "+ Creating client settings named '$($ClientSettingsInfo.name)'."
 
 				if($WhatIf -eq $false)
@@ -499,11 +574,11 @@ function New-CMFTWClientSettings
 			}
 			else
 			{
-				Write-Output "= Client settings named '$($ClientSettingsInfo.name)' already exists."			
+				Write-Output "= Client settings named '$($ClientSettingsInfo.name)' already exists."
 			}
-			
+
 			$_.settings | Set-ClientSettings -Name $ClientSettingsInfo.name -Schedules $Schedules -TotalClientSettingsItemCount ($ClientSettingsInfo.settings | Measure-Object).count
-			
+
 			if($ClientSettingsInfo.name -ne 'Default Client Settings' -and $ClientSettingsInfo.collection)
 			{
 				Write-Output ">> Deploying client settings named '$($ClientSettingsInfo.name)' to the collection named '$($ClientSettingsInfo.collection)."
@@ -515,7 +590,7 @@ function New-CMFTWClientSettings
 			}
 		}
 	}
-	
+
 	end
 	{
 	    if($TotalClientSettingsCount)
@@ -548,9 +623,9 @@ function New-CMFTWSchedule
             Write-Progress -Activity "Creating Schedules" -Status "$scheduleCount of $TotalScheduleCount" -CurrentOperation $ScheduleInfo.name `
                 -PercentComplete ($scheduleCount++ / $TotalScheduleCount * 100) -Id 1
         }
-		
-		$commandline = Process-Parameters -ExcludeNameParam -Object $ScheduleInfo 
-		
+
+		$commandline = Process-Parameters -ExcludeNameParam -Object $ScheduleInfo
+
 		$commandline = "New-CMSchedule $commandline"
 		$schedule = Invoke-Expression -Command $commandline
 
@@ -562,7 +637,7 @@ function New-CMFTWSchedule
         {
             Write-Progress -Activity "Creating Schedules" -Completed -Id 1
         }
-		
+
         $schedulehash
     }
 }
@@ -573,14 +648,14 @@ function New-CMFTWUpdatePackage
 	(
 		[Parameter(Mandatory=$true,ValueFromPipeline)]
 		[PSCustomObject] $PackageInfo,
-		[int] $TotalPackageCount 
+		[int] $TotalPackageCount
 	)
-	
+
 	begin
 	{
 		$packageCount = 0
 	}
-	
+
 	process
 	{
 		if($TotalPackageCount)
@@ -588,37 +663,67 @@ function New-CMFTWUpdatePackage
             Write-Progress -Activity "Creating Update Packages" -Status "$packageCount of $TotalPackageCount" -CurrentOperation $ADRInfo.type `
                 -PercentComplete ($packageCount++ / $TotalPackageCount * 100) -Id 1
         }
-		
+
+		#If there is a variable in the name of the update package, expand it
+        $PackageInfo.Name = $ExecutionContext.InvokeCommand.ExpandString($PackageInfo.Name)
+
 		$folderName = $PackageInfo.Name -replace '\s', ''
-		$sourceFolderPath = $PackageInfo.Path
-        $fullSourcePath = $sourceFolderPath + $folderName
-		
-		if($PackageInfo.Path.LastIndexOf('\') -ne ($PackageInfo.Path.length - 1))
-		{
-			$fullSourcePath = $PackageInfo.Path
-            $lastSlash = $PackageInfo.Path.LastIndexOf('\') + 1
-			$folderName = $PackageInfo.Path.Substring($lastSlash)
-			$sourceFolderPath = $PackageInfo.Path.Substring(0, $lastSlash)
-		}       
-		
+        $split = $PackageInfo.Path -split "\\"
+        $sourceFolderPath = ""
+        foreach($match in $split){
+            if($match[0] -eq "$"){
+                #Expanding variable
+                $matchValue = "$(Invoke-Expression -Command $match)"
+            }else{
+                $matchValue = $match
+            }
+            if($sourceFolderPath -eq ""){
+                $sourceFolderPath = $matchValue
+            }else{
+                $sourceFolderPath = Join-Path $sourceFolderPath $matchValue
+            }
+        }
+        $fullSourcePath = Join-Path $sourceFolderPath $folderName
+
 		if(-not (Test-Path $fullSourcePath))
 		{
 			Write-Output "  + Creating source folder named $folderName at $sourceFolderPath"
-			
+
 			if($WhatIf -eq $false)
 			{
 				New-Item -Path $sourceFolderPath -Name $folderName -ItemType Directory
-			}	
-		}
-		
-		Write-Output "  + Creating update package: $($PackageInfo.Name)"
+			}
+		}else{
+            Write-Output " = Source folder `"$fullSourcePath`" already exists."
+        }
 
-		if($WhatIf -eq $false)
-		{
-			. ".\New-CMDeploymentPackage.ps1" -SiteServer $([System.Net.Dns]::GetHostByName((hostname)).HostName) -Name $PackageInfo.Name -SourcePath $fullSourcePath
-		}
+		Push-Location $siteCode":"
+        if(-not (Get-CMSoftwareUpdateDeploymentPackage -Name $($PackageInfo.Name))){
+
+            Write-Output " + Creating update package: $($PackageInfo.Name)"
+
+		    if($WhatIf -eq $false)
+		    {
+                New-CMSoftwareUpdateDeploymentPackage -Name $($PackageInfo.Name) -Path $fullSourcePath | Out-Null
+		    }
+        }else{
+            Write-Output " = Update package '$($PackageInfo.Name)' already exists."
+        }
+        #Enable Binary Differential Replication (BDR) on the package
+        $SiteServer = Get-CMSite | Select-Object -ExpandProperty ServerName
+        $updatePackage = Get-CMSoftwareUpdateDeploymentPackage -Name $($PackageInfo.Name)
+
+        Pop-Location
+
+        $wmiPackage = Get-WmiObject -Namespace "root\SMS\site_AA1" -ComputerName $SiteServer -Query "SELECT * FROM SMS_SoftwareUpdatesPackage WHERE PackageID = '$($updatePackage.PackageID)'"
+        $wmiPackage = [wmi]$wmiPackage.__PATH
+        if($wmiPackage.PkgFlags -ne 83886080){
+            Write-Output " + Enabling Binary Differential Replication (BDR) for the update package."
+            $wmiPackage.PkgFlags = 83886080
+            $wmiPackage.Put() | Out-Null
+        }
 	}
-	
+
 	end
 	{
 		if($TotalPackageCount)
@@ -638,12 +743,12 @@ function New-CMFTWADRDeployment
 		[Parameter(Mandatory=$true)]
 		[string] $ADRName
 	)
-	
+
 	begin
 	{
 		$adrDeploymentCount = 0
 	}
-	
+
 	process
 	{
 		if($TotalADRDeploymentCount)
@@ -651,17 +756,38 @@ function New-CMFTWADRDeployment
             Write-Progress -Activity "Creating Automatic Deployment Rule Deployments" -Status "$adrDeploymentCount of $TotalADRDeploymentCount" -CurrentOperation $ADRDeploymentInfo.CollectionName `
                 -PercentComplete ($adrDeploymentCount++ / $TotalADRDeploymentCount * 100) -Id 2 -ParentId 1
         }
-		
-		$commandline = Process-Parameters -Object $ADRDeploymentInfo               
-		Write-Output "  + Creating Automatic Deployment Rule Deployment: $commandline"
 
 		if($WhatIf -eq $false)
 		{
-			$commandline = "New-CMAutoDeploymentRuleDeployment -name '$ADRName' $commandline"
-			Invoke-Expression -Command $commandline
+
+            $RuleID = Get-CMAutoDeploymentRule -Name $ADRName -Fast | Select-Object -ExpandProperty AutoDeploymentID
+            $currentDeployments = Get-CMAutoDeploymentRuleDeployment | Where-Object {$_.RuleID -eq $RuleID}
+            if($currentDeployments.Collectionname -contains $ADRDeploymentInfo.CollectionName){
+                Write-Output " ! This ADR already has a deployment for collection '$($ADRDeploymentInfo.CollectionName)', skipping deployment."
+            }else{
+                $commandline = Process-Parameters -Object $ADRDeploymentInfo
+		        Write-Output "  + Creating Automatic Deployment Rule Deployment: $commandline"
+
+                $commandline = "New-CMAutoDeploymentRuleDeployment -name '$ADRName' $commandline"
+			    $ADRDeployment = Invoke-Expression -Command $commandline
+
+                #Source: https://smsagent.blog/2019/01/31/creating-adr-deployments-in-sccm-with-powershell/
+                # Update the deployment with some additional params not available in the cmdlet
+                [xml]$DT = $ADRDeployment.DeploymentTemplate
+
+                # If any update in this deployment requires a system restart, run updates deployment evaluation cycle after restart
+                If ($null -eq $DT.DeploymentCreationActionXML.RequirePostRebootFullScan)
+                {
+                    $NewChild = $DT.CreateElement("RequirePostRebootFullScan")
+                    [void]$DT.SelectSingleNode("DeploymentCreationActionXML").AppendChild($NewChild)
+                }
+                $DT.DeploymentCreationActionXML.RequirePostRebootFullScan = "Checked"
+                $ADRDeployment.DeploymentTemplate = $DT.OuterXml
+                $ADRDeployment.Put()
+            }
 		}
 	}
-	
+
 	end
 	{
 		if($TotalADRDeploymentCount)
@@ -679,14 +805,14 @@ function New-CMFTWADR
 		[Hashtable] $Schedules,
 		[Parameter(Mandatory=$true,ValueFromPipeline)]
 		[PSCustomObject] $ADRInfo,
-		[int] $TotalADRCount 
+		[int] $TotalADRCount
 	)
-	
+
 	begin
 	{
 		$adrCount = 0
 	}
-	
+
 	process
 	{
 		if($TotalADRCount)
@@ -694,22 +820,39 @@ function New-CMFTWADR
             Write-Progress -Activity "Creating Automatic Deployment Rules" -Status "$adrCount of $TotalADRCount" -CurrentOperation $ADRInfo.type `
                 -PercentComplete ($adrCount++ / $TotalADRCount * 100) -Id 1
         }
-		
-		$commandline = Process-Parameters -Object $ADRInfo -ExcludeParams "additionaldeployments"              
-		Write-Output "  + Creating Automatic Deployment Rule: $commandline"
+		if(-not (Get-CMSoftwareUpdateAutoDeploymentRule -Name $($ADRInfo.Name) -Fast)){
+            $commandline = Process-Parameters -Object $ADRInfo -ExcludeParams "additionaldeployments"
+		    Write-Output "  + Creating Automatic Deployment Rule: $commandline"
 
-		if($WhatIf -eq $false)
-		{
-			$commandline = "New-CMSoftwareUpdateAutoDeploymentRule $commandline"
-			Invoke-Expression -Command $commandline
-		}
-		
+		    if($WhatIf -eq $false)
+		    {
+			    $commandline = "New-CMSoftwareUpdateAutoDeploymentRule $commandline"
+			    $ADRDeployment = Invoke-Expression -Command $commandline
+
+                #Source: https://smsagent.blog/2019/01/31/creating-adr-deployments-in-sccm-with-powershell/
+                # Update the deployment with some additional params not available in the cmdlet
+                [xml]$DT = $ADRDeployment.DeploymentTemplate
+
+                # If any update in this deployment requires a system restart, run updates deployment evaluation cycle after restart
+                If ($null -eq $DT.DeploymentCreationActionXML.RequirePostRebootFullScan)
+                {
+                    $NewChild = $DT.CreateElement("RequirePostRebootFullScan")
+                    [void]$DT.SelectSingleNode("DeploymentCreationActionXML").AppendChild($NewChild)
+                }
+                $DT.DeploymentCreationActionXML.RequirePostRebootFullScan = "Checked"
+                $ADRDeployment.DeploymentTemplate = $DT.OuterXml
+                $ADRDeployment.Put()
+		    }
+        }else{
+            Write-Output " = Automatic Deployment Rule '$($ADRInfo.Name)' already exists."
+        }
+
 		if($ADRInfo.additionaldeployments)
 		{
 			$ADRInfo.additionaldeployments | New-CMFTWADRDeployment -ADRName $ADRInfo.Name -TotalADRDeploymentCount ($ADRInfo.additionaldeployments | Measure-Object).Count
 		}
 	}
-	
+
 	end
 	{
 		if($TotalADRCount)
@@ -731,7 +874,7 @@ Import-module ($Env:SMS_ADMIN_UI_PATH.Substring(0, $Env:SMS_ADMIN_UI_PATH.Length
 $siteCode = Get-PSDrive -PSProvider CMSITE
 
 $buildConfig = ((Get-Content -Path $ConfigFile) -Join "`n")
-	
+
 $buildObjects = ($buildConfig | ConvertFrom-Json)
 
 Push-Location $siteCode":"
@@ -749,13 +892,18 @@ if($Collections -eq $true -and $buildObjects.defaultitems.devicecollectionfolder
 	$buildObjects.defaultitems.devicecollectionfolders | New-CMFTWDeviceCollectionFolder -Path "$($siteCode):\DeviceCollection" -Schedules $schedules -TotalFolderCount ($buildObjects.defaultitems.devicecollectionfolders | Measure-Object).Count
 }
 
+if($Collections -eq $true -and $buildObjects.defaultitems.maintenancewindows)
+{
+    $buildObjects.defaultitems.maintenancewindows | New-CMFTWMaintenanceWindow -Schedules $schedules -TotalMWCount ($buildObjects.defaultitems.maintenancewindows | Measure-Object).Count
+}
+
 if($ClientSettings -eq $true -and $buildObjects.defaultitems.clientsettings)
 {
 	$buildObjects.defaultitems.clientsettings | New-CMFTWClientSettings -Schedules $schedules -TotalClientSettingsCount ($buildObjects.defaultitems.clientsettings | Measure-Object).Count
 }
 
 if($ADRs -eq $true)
-{	
+{
     Pop-Location
 
 	if($buildObjects.defaultitems.updatepackages)
