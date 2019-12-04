@@ -27,10 +27,13 @@ the membership of collection will not be updated.
 updates the membership of collections defined in the Build-CMDefaultConfig.json configuration file.
 		
 	.NOTES
-		Version 1.5
+		Version 1.52
         Jason Sandys
 
 		Version History
+		- 1.52 (3 Decemeber 2019): Fixed Include and Exclude Rules
+									Added ability to use variables for limiting collections
+									include, and exclude rules.
 		- 1.51 (27 September 2018): Added subfolder creation capabilities
         - 1.5 (26 September 2018): Initial Version
 
@@ -220,8 +223,8 @@ param
 
             if(-not($collection))
 			{
-			
-				$limitingCollectionID = (Get-CMDeviceCollection -Name $CollectionInfo.limitingCollection).CollectionID
+				$limitingCollection = $ExecutionContext.InvokeCommand.ExpandString($CollectionInfo.limitingCollection)
+				$limitingCollectionID = (Get-CMDeviceCollection -Name $limitingCollection).CollectionID
 
 				if(-not ($limitingCollectionID))
 				{
@@ -320,25 +323,25 @@ param
 					
 				if($CollectionInfo.includeRules)
 				{
-					$CollectionInfo.includeRules -split "," | ForEach-Object {
+					$CollectionInfo.includeRules | Get-Member -Type NoteProperty | ForEach-Object {
 						
-						#$includeCollectionName = ($CollectionInfo.includeRules.$($_.Name))
+						$includeCollectionName = $ExecutionContext.InvokeCommand.ExpandString($CollectionInfo.includeRules.$($_.Name))
 
-                        if(-not(Get-CMDeviceCollection -Name $_))
+                        if(-not(Get-CMDeviceCollection -Name $includeCollectionName))
                         {
-                            Write-Output " x The collecton $_ does not exist  and cannot be included in $theCollectionName."
+                            Write-Output " x The collecton $includeCollectionName does not exist  and cannot be included in $theCollectionName."
                         }
-                        elseif(Get-CMDeviceCollectionIncludeMembershipRule -Collection $collection -IncludeCollectionName $_)
+                        elseif(Get-CMDeviceCollectionIncludeMembershipRule -Collection $collection -IncludeCollectionName $includeCollectionName)
                         {
-                            Write-Output " = Include rule for '$theCollectionName': $_ already exists."
+                            Write-Output " = Include rule for '$theCollectionName': $includeCollectionName already exists."
                         }
                         else
                         {
-						    Write-Output " + Creating new include rule for '$theCollectionName': $_"
+						    Write-Output " + Creating new include rule for '$theCollectionName': $includeCollectionName"
 						
 						    if($WhatIf -eq $false)
 						    {
-							    Add-CMDeviceCollectionIncludeMembershipRule -Collection $collection -IncludeCollectionName $_
+							    Add-CMDeviceCollectionIncludeMembershipRule -Collection $collection -IncludeCollectionName $includeCollectionName
 						    }
                         }
 					}
@@ -346,25 +349,25 @@ param
 					
 				if($CollectionInfo.excludeRules)
 				{
-					$CollectionInfo.excludeRules -split "," | ForEach-Object {
+					$CollectionInfo.excludeRules| Get-Member -Type NoteProperty | ForEach-Object {
 						
-						#$excludeCollectionName = ($CollectionInfo.excludeRules.$($_.Name))
+						$excludeCollectionName = $ExecutionContext.InvokeCommand.ExpandString($CollectionInfo.excludeRules.$($_.Name))
 							
-						if(-not(Get-CMDeviceCollection -Name $_))
+						if(-not(Get-CMDeviceCollection -Name $excludeCollectionName))
                         {
-                            Write-Output " x The collecton $_ does not exist and cannot be excluded from $theCollectionName."
+                            Write-Output " x The collecton $excludeCollectionName does not exist and cannot be excluded from $theCollectionName."
                         }
-                        elseif(Get-CMDeviceCollectionExcludeMembershipRule -Collection $collection -ExcludeCollectionName $_)
+                        elseif(Get-CMDeviceCollectionExcludeMembershipRule -Collection $collection -ExcludeCollectionName $excludeCollectionName)
                         {
-                            Write-Output " = Exclude rule for '$theCollectionName': $_ already exists."
+                            Write-Output " = Exclude rule for '$theCollectionName': $excludeCollectionName already exists."
                         }
                         else
                         {
-                            Write-Output " + Creating new exclude rule for '$theCollectionName': $_"
+                            Write-Output " + Creating new exclude rule for '$theCollectionName': $excludeCollectionName"
 						
 						    if($WhatIf -eq $false)
 						    {
-							    Add-CMDeviceCollectionExcludeMembershipRule -Collection $collection -ExcludeCollectionName $_
+							    Add-CMDeviceCollectionExcludeMembershipRule -Collection $collection -ExcludeCollectionName $excludeCollectionName
 						    }
                         }
 					}
@@ -719,10 +722,10 @@ function New-CMFTWADR
 	}
 }
 
-if($WhatIf -eq $true)
-{
-	$VerbosePreference = "Continue"
-}
+# if($WhatIf -eq $true)
+# {
+# 	$VerbosePreference = "Continue"
+# }
 
 #Load Configuration Manager PowerShell Module
 Import-module ($Env:SMS_ADMIN_UI_PATH.Substring(0, $Env:SMS_ADMIN_UI_PATH.Length - 5) + '\ConfigurationManager.psd1')
