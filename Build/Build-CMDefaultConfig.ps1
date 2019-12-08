@@ -3,20 +3,27 @@
 		Creates standard objects and configurations in ConfigMgr from a supplied json configuration file.
 	
 	.DESCRIPTION
-		Creates Collection Folders, Collections, Client Settings, Update Packages, and Automatic Deployment rules in ConfigMgr using
-a json file where these are all defined.
+		Creates Collection Folders, Collections, Client Settings, Update Packages, and Automatic Deployment rules in
+		ConfigMgr using a json file where these are all defined.
 	
 	.PARAMETER ConfigFile
 		The input json configuration file to use. If not specified, .\CMDefaultConfig.json is used.
 	.PARAMETER Collections
-        Process and create or update collections defined in the configuration file.
+        (Switch) Create or update collections defined in the configuration file.
 	.PARAMETER ClientSettings
-        Create Client Settings Packages defined in the configuration file.
+        (Switch) Create Client Settings Packages defined in the configuration file.
 	.PARAMETER ADRs
-        Create Automatic Deployment Rules defined in the configuration file.	
+		(Switch) Create Automatic Deployment Rules defined in the configuration file.
+	.PARAMETER UpdatePackages
+		(Switch) Create Update (aka Deployment) Packages Rules defined in the configuration file.
+	.PARAMETER RecreateExistingADRs
+		(Switch) Delete existing ADRs with the same names if they exist before trying to create those specified in the
+		configuration file. If not specified and an ADR already exists with the same name, it will be skipped.
+	.PARAMETER ScheduleType
+        Specifies a schedule type to filter on in the configuration file.
 	.PARAMETER UpdateMembership
-        Update the membership of existing collections specified in the configuration file. If this is not specified and the collection already exists,
-the membership of collection will not be updated.
+		Update the membership of existing collections specified in the configuration file. If this is not specified and 
+		the collection already exists, the membership of collection will not be updated.
 
     .EXAMPLE
         .\Build-CMDefaultConfig.ps1 -ConfigFile .\Build-CMDefaultConfig.json -Collections
@@ -27,10 +34,15 @@ the membership of collection will not be updated.
 updates the membership of collections defined in the Build-CMDefaultConfig.json configuration file.
 		
 	.NOTES
-		Version 1.52
+		Version 1.55
         Jason Sandys
 
 		Version History
+		- 1.55 (8 December 2019): Added update package check before attempted ADR creation
+		- 1.54 (7 December 2019): Added Schedule type selection based on command-line parameter
+									Added ADR recreation (or skip) if exist
+									Added switch to create (or skip) Update Package creation
+		- 1.53 (4 December 2019): Added ADR deployment templates and template sets
 		- 1.52 (3 Decemeber 2019): Fixed Include and Exclude Rules
 									Added ability to use variables for limiting collections
 									include, and exclude rules.
@@ -48,13 +60,41 @@ param
 	[ValidateScript({ Test-Path -PathType Leaf -Path $_ })]
 	[Alias('config')]
 	[string]$ConfigFile = '.\CMDefaultConfig.json',
+	[string]$ScheduleType,
 	[switch]$Collections,
 	[switch]$ClientSettings,
 	[switch]$ADRs,
+	[switch]$RecreateExistingADRs,
+	[switch]$UpdatePackages,
 	[switch]$UpdateMembership,
     [switch]$WhatIf
 
 )
+
+function Add-TemplateParameters
+{
+	param
+	(
+		[Parameter(Mandatory=$true)]
+		[PSCustomObject] $Object,
+		[PSCustomObject] $Template,
+		[array] $ExcludeParams
+	)
+
+	$Template | Get-Member -Type NoteProperty | ForEach-Object {
+		if($_.Name -ine 'name' -and $_.Name -ine 'template' -and $Object.$($_.Name) -eq $null)
+		{
+			$Object | Add-Member -MemberType NoteProperty -Name $_.Name -Value $Template.$($_.Name)
+		}
+	}
+
+	if($Template.Template)
+	{
+		$subtemplate = $buildObjects.defaultitems.deploymenttemplates | Where-Object { $_.name -eq $Object.Template } | Select-Object -First 1
+
+		Add-TemplateParameters -Object $Object -Template $subtemplate
+	}
+}
 
 function Process-Parameters 
 {
@@ -68,6 +108,12 @@ function Process-Parameters
 	)
 
 	$command = ""
+
+	if($Object.Template)
+	{
+		$template = $buildObjects.defaultitems.templates | Where-Object { $_.name -eq $Object.Template } | Select-Object -First 1
+		Add-TemplateParameters -Object $Object -Template $template
+	}
 	
 	$Object | Get-Member -Type NoteProperty | ForEach-Object {
 				
@@ -95,7 +141,12 @@ function Process-Parameters
 			
 			elseif ($paramName -ieq 'start')
 			{
-				$command += " -$($paramName) '$(Get-Date -Date((Get-Date).ToString('yyyy-MM-dd' + 'T' + $paramValue)))'"
+				#$command += " -$($paramName) '$(Get-Date -Date((Get-Date).ToString('yyyy-MM-dd' + 'T' + $paramValue)))'"
+				$command += " -$($paramName) '$(Get-Date -Date((Get-Date).ToString($paramValue)))'"
+			}
+			elseif($paramName -ieq 'template')
+			{
+				#Do nothing
 			}
 
 			elseif ($paramName -ine 'name' -or -not $ExcludeNameParam)
@@ -450,7 +501,7 @@ function Set-ClientSettings
 			if($WhatIf -eq $false)
 			{
                 $commandline = "Set-CMClientSetting -Name `"$Name`" $commandline"
-				Invoke-Expression -Command $commandline
+				$output = Invoke-Expression -Command $commandline
 			}
 		}
 	}
@@ -534,6 +585,7 @@ function New-CMFTWSchedule
 	(
 		[Parameter(Mandatory=$true,ValueFromPipeline)]
 		[PSCustomObject] $ScheduleInfo,
+		[string] $ScheduleTypeFilter,
 		[int] $TotalScheduleCount
 	)
 
@@ -546,18 +598,22 @@ function New-CMFTWSchedule
 
     process
     {
-		if($TotalScheduleCount)
-        {
-            Write-Progress -Activity "Creating Schedules" -Status "$scheduleCount of $TotalScheduleCount" -CurrentOperation $ScheduleInfo.name `
-                -PercentComplete ($scheduleCount++ / $TotalScheduleCount * 100) -Id 1
-        }
-		
-		$commandline = Process-Parameters -ExcludeNameParam -Object $ScheduleInfo 
-		
-		$commandline = "New-CMSchedule $commandline"
-		$schedule = Invoke-Expression -Command $commandline
+		if($ScheduleInfo.scheduletype -eq $null -or $ScheduleInfo.scheduletype -ieq $ScheduleTypeFilter)
+		{
 
-        $schedulehash.Add($ScheduleInfo.name, $schedule)
+			if($TotalScheduleCount)
+			{
+				Write-Progress -Activity "Creating Schedules" -Status "$scheduleCount of $TotalScheduleCount" -CurrentOperation $ScheduleInfo.name `
+					-PercentComplete ($scheduleCount++ / $TotalScheduleCount * 100) -Id 1
+			}
+			
+			$commandline = Process-Parameters -ExcludeNameParam -Object $ScheduleInfo -ExcludeParams "scheduletype"
+			
+			$commandline = "New-CMSchedule $commandline"
+			$schedule = Invoke-Expression -Command $commandline
+
+			$schedulehash.Add($ScheduleInfo.name, $schedule)
+		}
     }
     end
     {
@@ -655,13 +711,15 @@ function New-CMFTWADRDeployment
                 -PercentComplete ($adrDeploymentCount++ / $TotalADRDeploymentCount * 100) -Id 2 -ParentId 1
         }
 		
+		$adrDeploymentCollection = $ExecutionContext.InvokeCommand.ExpandString($ADRDeploymentInfo.CollectionName)
+
 		$commandline = Process-Parameters -Object $ADRDeploymentInfo               
-		Write-Output "  + Creating Automatic Deployment Rule Deployment: $commandline"
+		Write-Output "    + Creating Automatic Deployment Rule Deployment: $adrDeploymentCollection"
 
 		if($WhatIf -eq $false)
 		{
 			$commandline = "New-CMAutoDeploymentRuleDeployment -name '$ADRName' $commandline"
-			Invoke-Expression -Command $commandline
+			$output = Invoke-Expression -Command $commandline
 		}
 	}
 	
@@ -675,7 +733,7 @@ function New-CMFTWADRDeployment
 }
 
 function New-CMFTWADR
-{
+{ 
 	param
 	(
 		[Parameter(Mandatory=$true)]
@@ -687,7 +745,7 @@ function New-CMFTWADR
 	
 	begin
 	{
-		$adrCount = 0
+		$adrCount = 1
 	}
 	
 	process
@@ -696,20 +754,57 @@ function New-CMFTWADR
         {
             Write-Progress -Activity "Creating Automatic Deployment Rules" -Status "$adrCount of $TotalADRCount" -CurrentOperation $ADRInfo.type `
                 -PercentComplete ($adrCount++ / $TotalADRCount * 100) -Id 1
-        }
-		
-		$commandline = Process-Parameters -Object $ADRInfo -ExcludeParams "additionaldeployments"              
-		Write-Output "  + Creating Automatic Deployment Rule: $commandline"
-
-		if($WhatIf -eq $false)
-		{
-			$commandline = "New-CMSoftwareUpdateAutoDeploymentRule $commandline"
-			Invoke-Expression -Command $commandline
 		}
-		
-		if($ADRInfo.additionaldeployments)
+
+		$adrName = $ExecutionContext.InvokeCommand.ExpandString($ADRInfo.Name)
+		$updatePackageName = $ExecutionContext.InvokeCommand.ExpandString($ADRInfo.DeploymentPackageName)
+
+		$updatePackage = Get-CMSoftwareUpdateDeploymentPackage -Name $updatePackageName
+
+		if($updatePackage)
 		{
-			$ADRInfo.additionaldeployments | New-CMFTWADRDeployment -ADRName $ADRInfo.Name -TotalADRDeploymentCount ($ADRInfo.additionaldeployments | Measure-Object).Count
+			$currentADR = Get-CMSoftwareUpdateAutoDeploymentRule -Name $adrName -Fast
+
+			if($currentADR -and $RecreateExistingADRs)
+			{
+				Write-Output "  - Removing Existing Automatic Deployment Rule: $adrName"
+				Remove-CMSoftwareUpdateAutoDeploymentRule -Name $adrName -Force
+			}
+			
+			if($currentADR -eq $null -or $RecreateExistingADRs)
+			{
+				$commandline = Process-Parameters -Object $ADRInfo -ExcludeParams "additionaldeployments","templateset"
+
+				Write-Output "  + Creating Automatic Deployment Rule: $adrName"
+
+				if($WhatIf -eq $false)
+				{
+					$commandline = "New-CMSoftwareUpdateAutoDeploymentRule $commandline"
+					$output = Invoke-Expression -Command $commandline
+				}
+				
+				if($WhatIf -eq $true -or (Get-CMSoftwareUpdateAutoDeploymentRule -Name $adrName -Fast))
+				{
+
+					if($ADRInfo.additionaldeployments)
+					{
+						$ADRInfo.additionaldeployments | New-CMFTWADRDeployment -ADRName $adrName -TotalADRDeploymentCount ($ADRInfo.additionaldeployments | Measure-Object).Count
+					}
+					if($ADRInfo.templateset)
+					{
+						$templateset = $buildObjects.defaultitems.templatesets | Where-Object { $_.name -eq $ADRInfo.templateset }
+						$templateset.additionaldeployments | New-CMFTWADRDeployment -ADRName $adrName -TotalADRDeploymentCount ($templateset.additionaldeployments | Measure-Object).Count
+					}
+				}
+			}
+			else
+			{
+				Write-Output "  = Skipping Existing Automatic Deployment Rule: $adrName"		
+			}
+		}
+		else
+		{
+			Write-Output "  = Skipping Automatic Deployment Rule '$adrName' because the specifed update package does not exist: $updatePackageName"	
 		}
 	}
 	
@@ -744,7 +839,7 @@ $buildObjects.defaultitems.variables | Get-Member -MemberType NoteProperty | `
 
 if($buildObjects.defaultitems.schedules)
 {
-	$schedules = ($buildObjects.defaultitems.schedules | New-CMFTWSchedule)
+	$schedules = ($buildObjects.defaultitems.schedules | New-CMFTWSchedule -ScheduleTypeFilter $ScheduleType)
 }
 
 if($Collections -eq $true -and $buildObjects.defaultitems.devicecollectionfolders)
@@ -757,21 +852,18 @@ if($ClientSettings -eq $true -and $buildObjects.defaultitems.clientsettings)
 	$buildObjects.defaultitems.clientsettings | New-CMFTWClientSettings -Schedules $schedules -TotalClientSettingsCount ($buildObjects.defaultitems.clientsettings | Measure-Object).Count
 }
 
-if($ADRs -eq $true)
-{	
+if($UpdatePackages -eq $true -and $buildObjects.defaultitems.updatepackages)
+{
     Pop-Location
 
-	if($buildObjects.defaultitems.updatepackages)
-	{
-		$buildObjects.defaultitems.updatepackages | New-CMFTWUpdatePackage -TotalPackageCount ($buildObjects.defaultitems.updatepackages | Measure-Object).Count
-	}
+	$buildObjects.defaultitems.updatepackages | New-CMFTWUpdatePackage -TotalPackageCount ($buildObjects.defaultitems.updatepackages | Measure-Object).Count
 
 	Push-Location $siteCode":"
+}
 
-    if($buildObjects.defaultitems.automaticdeploymentrules)
-	{
-		$buildObjects.defaultitems.automaticdeploymentrules | New-CMFTWADR -Schedules $schedules -TotalADRCount ($buildObjects.defaultitems.automaticdeploymentrules | Measure-Object).Count
-	}
+if($ADRs -eq $true -and $buildObjects.defaultitems.automaticdeploymentrules)
+{	
+	$buildObjects.defaultitems.automaticdeploymentrules | New-CMFTWADR -Schedules $schedules -TotalADRCount ($buildObjects.defaultitems.automaticdeploymentrules | Measure-Object).Count
 }
 
 Pop-Location

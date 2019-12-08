@@ -2,9 +2,11 @@
 {
 "variables":[
 	{
-		"healthThreshold":"14",
-		"currentClientAgentVersion":"5.00.8412.1307",
-		"organizationName":"\"ConfigMgrFTW 300\""
+		"organizationName":"\"Organization\"",
+		"workstationLimitingCollection":"All Managed Workstations",
+		"updatePrefix":"Updates: ",
+		"workstationPilot":"Workstation Pilot",
+		"workstationProd":"Workstation Production"
 	}
 ],
 "schedules":[
@@ -25,429 +27,204 @@
 		"recurinterval":"days"
 	},
 	{
-		"name":"patchtuesday",
+		"name":"patchtuesdayplusoneweek",
+		"scheduletype":"odd",
 		"dayofweek":"Tuesday",
-		"WeekOrder":"2",
-		"start":"20:00"
+		"WeekOrder":"3",
+		"start":"2019-01-01 20:00",
+		"recurcount":"3"
+	},
+	{
+		"name":"patchtuesdayplusoneweek",
+		"scheduletype":"even",
+		"dayofweek":"Tuesday",
+		"WeekOrder":"3",
+		"start":"2019-02-01 20:00",
+		"recurcount":"3"
 	}
 ],
 "devicecollectionfolders":[
 	{
-		"name":"Operating System",
-		"prefix":"OS: ",
-		"collections":[ 
-			{
-				"name":"All Windows Workstations",
-				"limitingCollection":"All Desktop and Server Clients",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"All Windows Workstations":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.OperatingSystemNameandVersion like 'Microsoft Windows NT Workstation%'"
-					}
-				]
-			},
-			{
-				"name":"All Windows Workstations - Windows 7",
-				"limitingCollection":"All Windows Workstations",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"All Windows Workstations - Windows 7":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.Build like '6.1.%'"
-					}
-				]
-			},
-			{
-				"name":"All Windows Workstations - Windows 8",
-				"limitingCollection":"All Windows Workstations",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"All Windows Workstations - Windows 8":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.Build like '6.2.%'"
-					}
-				]
-			},
-			{
-				"name":"All Windows Workstations - Windows 8.1",
-				"limitingCollection":"All Windows Workstations",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"All Windows Workstations - Windows 8.1":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.Build like '6.3.%'"
-					}
-				]
-			},
-			{
-				"name":"All Windows Workstations - Windows 10",
-				"limitingCollection":"All Windows Workstations",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"All Windows Workstations - Windows 10":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.Build like '10.0.%'"
-					}
-				]
-			},
-			{
-				"name":"All Windows Workstations - Windows 10 1507",
-				"limitingCollection":"All Windows Workstations",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"All Windows Workstations - Windows 10 1507":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.Build = '10.0.10240'"
-					}
-				]
-			},
-			{
-				"name":"All Windows Workstations - Windows 10 2015 LTSB",
-				"limitingCollection":"All Windows Workstations",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"All Windows Workstations - Windows 10 2015 LTSB":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.Build = '10.0.10240' and SMS_R_System.OSBranch = '2'"
-					}
-				]
-			},
-			{
-				"name":"All Windows Workstations - Windows 10 1511",
-				"limitingCollection":"All Windows Workstations",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"All Windows Workstations - Windows 10 1511":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.Build = '10.0.10586'"
-					}
-				]
-			},
-			{
-				"name":"All Windows Workstations - Windows 10 1607",
-				"limitingCollection":"All Windows Workstations",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"All Windows Workstations - Windows 10 1607":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.Build = '10.0.14393'"
-					}
-				]
-			},
-			{
-				"name":"All Windows Workstations - Windows 10 2016 LTSB",
-				"limitingCollection":"All Windows Workstations",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"All Windows Workstations - Windows 10 2016 LTSB":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.Build = '10.0.14393' and SMS_R_System.OSBranch = '2'"
-					}
-				]
-			},
-			{
-				"name":"All Windows Servers",
-				"limitingCollection":"All Desktop and Server Clients",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"All Windows Servers":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.OperatingSystemNameandVersion like 'Microsoft Windows NT Server%'"
-					}
-				]
-			},
-			{
-				"name":"All Windows Servers - Windows Server 2008",
-				"limitingCollection":"All Windows Servers",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"All Windows Servers - Windows Server 2008":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.Build like '6.0.%'"
-					}
-				]
-			},
-			{
-				"name":"All Windows Servers - Windows Server 2008 R2",
-				"limitingCollection":"All Windows Servers",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"All Windows Servers - Windows Server 2008 R2":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.Build like '6.1.%'"
-					}
-				]
-			},
-			{
-				"name":"All Windows Servers - Windows Server 2012",
-				"limitingCollection":"All Windows Servers",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"All Windows Servers - Windows Server 2012":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.Build like '6.2.%'"
-					}
-				]
-			},
-			{
-				"name":"All Windows Servers - Windows Server 2012 R2",
-				"limitingCollection":"All Windows Servers",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"All Windows Servers - Windows Server 2012 R2":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.Build like '6.3.%'"
-					}
-				]
-			},
-			{
-				"name":"All Windows Servers - Windows Server 2016",
-				"limitingCollection":"All Windows Servers",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"All Windows Servers - Windows Server 2016":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.Build = '10.0.14393'"
-					}
-				]
-			}
-		]
-		
-	},
-	{
-		"name":"Client Health",
-		"prefix":"Health: ",
-		"collections":[
-			{
-				"name":"Clients not reporting hardware inventory in last $healthThreshold days",
-				"limitingCollection":"All Desktop and Server Clients",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"Clients not reporting hardware inventory":"select SMS_R_SYSTEM.ResourceID,SMS_R_SYSTEM.ResourceType,SMS_R_SYSTEM.Name,SMS_R_SYSTEM.SMSUniqueIdentifier,SMS_R_SYSTEM.ResourceDomainORWorkgroup,SMS_R_SYSTEM.Client from SMS_R_System where ResourceId in (select SMS_R_System.ResourceID from SMS_R_System inner join SMS_G_System_WORKSTATION_STATUS on SMS_G_System_WORKSTATION_STATUS.ResourceID = SMS_R_System.ResourceId where DATEDIFF(dd,SMS_G_System_WORKSTATION_STATUS.LastHardwareScan,GetDate()) > $healthThreshold)"
-					}
-				]
-			},
-			{
-				"name":"Clients not reporting heartbeat discovery in last $healthThreshold days",
-				"limitingCollection":"All Desktop and Server Clients",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"Clients not reporting heartbeat discovery":"select SMS_R_System.ResourceID,SMS_R_System.ResourceType,SMS_R_System.Name,SMS_R_System.SMSUniqueIdentifier,SMS_R_System.ResourceDomainORWorkgroup,SMS_R_System.Client from SMS_R_System where ResourceId in (select ResourceID from SMS_R_System where AgentName in ('Heartbeat Discovery') and DATEDIFF(day,AgentTime,GetDate()) > $healthThreshold )"
-					}
-				]
-			},
-			{
-				"name":"Systems with down-level client agents",
-				"limitingCollection":"All Desktop and Server Clients",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"Systems with down-level client agents":"select SMS_R_SYSTEM.ResourceID,SMS_R_SYSTEM.ResourceType,SMS_R_SYSTEM.Name,SMS_R_SYSTEM.SMSUniqueIdentifier,SMS_R_SYSTEM.ResourceDomainORWorkgroup,SMS_R_SYSTEM.Client from SMS_R_System where SMS_R_System.ClientVersion <> '$currentClientAgentVersion'"
-					}
-				]
-			}
-		]
-	},
-	{
-		"name":"Client Tracking",
-		"prefix":"Tracking: ",
-		"collections":[
-			{
-				"name":"New resources in last 24 hours",
-				"limitingCollection":"All Systems",
-				"schedule":"daily",
-				"incremental":"no",
-				"queryRules":[
-					{
-						"New resources in last 24 hours":"select SMS_R_System.Name, SMS_R_System.CreationDate FROM SMS_R_System WHERE DateDiff(dd,SMS_R_System.CreationDate, GetDate()) <= 1"
-					}
-				]
-			}
-		]
-	},
-	{
 		"name":"Software Updates",
-		"prefix":"Updates: ",
+		"prefix":"$updatePrefix",
 		"collections":[
 			{
-				"name":"Workstation Test",
-				"limitingCollection":"OS: All Workstations",
+				"name":"$workstationProd Exclude",
+				"limitingCollection":"$workstationLimitingCollection",
 				"schedule":"daily",
 				"incremental":"no"
 			},
 			{
-				"name":"Workstation Exclusions",
-				"limitingCollection":"OS: All Workstations",
-				"schedule":"daily",
-				"incremental":"no"
-			},
-			{
-				"name":"Workstation All",
-				"limitingCollection":"OS: All Workstations",
+				"name":"$workstationPilot 1",
+				"limitingCollection":"$workstationLimitingCollection",
 				"schedule":"daily",
 				"incremental":"no",
-				"includeRules":[
-					{
-						"a":"OS: All Windows Workstations"
-					}
-				],
 				"excludeRules":[
 					{
-						"a":"Updates: Workstation Exclusions"
+						"a":"$updatePrefix$workstationProd Exclude"
 					}
 				]
 			},
 			{
-				"name":"Server Test",
-				"limitingCollection":"OS: All Server",
+				"name":"$workstationPilot 2",
+				"limitingCollection":"$workstationLimitingCollection",
 				"schedule":"daily",
-				"incremental":"no"
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
 			},
 			{
-				"name":"Server Exclusions",
-				"limitingCollection":"OS: All Server",
+				"name":"$workstationPilot 3",
+				"limitingCollection":"$workstationLimitingCollection",
 				"schedule":"daily",
-				"incremental":"no"
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
 			},
 			{
-				"name":"Server All",
-				"limitingCollection":"OS: All Servers",
+				"name":"$workstationProd 1",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 2",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 3",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 4",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 5",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 6",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 7",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 8",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 9",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 10",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd No Location",
+				"limitingCollection":"$workstationLimitingCollection",
 				"schedule":"daily",
 				"incremental":"no",
 				"includeRules":[
 					{
-						"a":"OS: All Windows Servers"
+						"a":"All Managed Workstations"						
 					}
 				],
 				"excludeRules":[
 					{
-						"a":"Updates: Server Exclusions"
+						"pr1":"$updatePrefix$workstationProd 1",
+						"pr2":"$updatePrefix$workstationProd 2",
+						"pr3":"$updatePrefix$workstationProd 3",
+						"pr4":"$updatePrefix$workstationProd 4",
+						"pr5":"$updatePrefix$workstationProd 5",
+						"pr6":"$updatePrefix$workstationProd 6",
+						"pr7":"$updatePrefix$workstationProd 7",
+						"pr8":"$updatePrefix$workstationProd 8",
+						"pr9":"$updatePrefix$workstationProd 9",
+						"pr10":"$updatePrefix$workstationProd 10",
+						"pi1":"$updatePrefix$workstationPilot 1",
+						"pi2":"$updatePrefix$workstationPilot 2",
+						"pi3":"$updatePrefix$workstationPilot 3",						
+						"a":"$updatePrefix$workstationProd Exclude"
 					}
 				]
-			}
-		]
-	}
-],
-"clientsettings":[
-
-	{
-		"name":"All Workstations",
-		"collection":"OS: All Windows Workstations",
-		"type":"device",
-		"settings":[
-			{
-				"type":"RemoteControl",
-				"AccessLevel":"FullControl",
-				"AllowClientChange":"False",
-				"AllowRemoteControlOfUnattendedComputer":"True",
-				"AudibleSignal":"PlayNoSound",
-				"FirewallExceptionProfile":"Domain,Private,Public",
-				"GrantRemoteControlPermissionToLocalAdministrator":"True",
-				"ManageRemoteDesktopSetting":"False",
-				"PromptUserForPermission":"True",
-				"ShowNotificationIconOnTaskbar":"True",
-				"ShowSessionConnectionBar":"True"
-			},
-			{
-				"type":"UserDeviceAffinity",
-				"AutoApproveAffinity":"True",
-				"LogOnThresholdMins":"2880",
-				"UsageThresholdDays":"30"	
-			},
-			{
-				"type":"PowerManagement",
-				"Enable":"True"
-			},
-			{
-				"type":"ClientPolicy",
-				"EnableUserPolicy":"True",
-				"PolicyPollingMins":"30"
-			},
-			{
-				"type":"ComputerRestart",
-				"RebootLogoffNotificationCountdownMins":"480",
-				"RebootLogoffNotificationFinalWindowMins":"15"
-			},
-			{
-				"type":"EndpointProtection",
-				"DisableFirstSignatureUpdate":"False",
-				"Enable":"True",
-				"ForceRebootHr":"24",
-				"InstallEndpointProtectionClient":"True",
-				"RemoveThirdParty":"True",
-				"SuppressReboot":"False"
-			},
-			{
-				"type":"SoftwareMetering",
-				"Enable":"True"
-			},
-			{
-				"type":"SoftwareDeployment",
-				"Schedule":"simpledaily"
-			}
-		]
-	},
-	{
-		"name":"All Servers",
-		"collection":"OS: All Windows Servers",
-		"type":"device",
-		"settings":[
-			{
-				"type":"ComputerRestart",
-				"RebootLogoffNotificationCountdownMins":"60",
-				"RebootLogoffNotificationFinalWindowMins":"15"
-			},
-			{
-				"type":"SoftwareInventory",
-				"Enable":"False"
-			},
-			{
-				"type":"SoftwareMetering",
-				"Enable":"False"
-			}
-		]
-		
-	},
-	{
-		"name":"All Desktop and Server Clients",
-		"collection":"All Desktop and Server Clients",
-		"type":"device",
-		"settings":[
-			{
-				"type":"ComputerAgent",
-				"AddPortalToTrustedSiteList":"True",
-				"AllowPortalToHaveElevatedTrust":"True",
-				"BrandingTitle":"$organizationName",
-				"DisplayNewProgramNotification":"True",
-				"InstallRestriction":"AllUsers",
-				"PowerShellExecutionPolicy":"Bypass",
-				"UseNewSoftwareCenter":"True"
-			},
-			{
-				"type":"SoftwareUpdate",
-				"Enable":"True",
-				"TimeUnit":"Hours",
-				"BatchingTimeout":"12",
-				"EnforceMandatory":"True"
-			},
-			{
-				"type":"Compliance",
-				"EnableComplianceEvaluation":"True"
-			},
-			{
-				"type":"SoftwareInventory",
-				"Enable":"False"
-			},
-			{
-				"type":"HardwareInventory",
-				"Enable":"True",
-				"Schedule":"simpledaily"
 			}
 		]
 	}
@@ -455,224 +232,185 @@
 "updatepackages":[
 	{
 		"Name":"All Workstation Updates",
-		"Path":"\\\\cm301.lab300.configmgrftw.com\\ConfigMgr\\Content\\Updates\\"
-	},
-	{
-		"Name":"All Server Updates",
-		"Path":"\\\\cm301.lab300.configmgrftw.com\\ConfigMgr\\Content\\Updates\\"
+		"Path":"\\\\server\\SCCMsourcecontent$\\Software Updates\\All Workstation Updates"
 	},
 	{
 		"Name":"All Office Updates",
-		"Path":"\\\\cm301.lab300.configmgrftw.com\\ConfigMgr\\Content\\Updates\\"
+		"Path":"\\\\server\\SCCMsourcecontent$\\Software Updates\\All Office Updates"
+	},
+	{
+		"Name":"All Patch MyPC Updates",
+		"Path":"\\\\server\\SCCMsourcecontent$\\Software Updates\\All Office Updates"
+	}
+],
+"templates":[
+	{
+		"name":"Master",
+		"AllowRestart":"false",
+		"AllowSoftwareInstallationOutsideMaintenanceWindow":"false",
+		"DeadlineTime":"2",
+		"DeadlineTimeUnit":"Days",
+		"EnabledAfterCreate":"false",
+		"NoInstallOnRemote":"false",
+		"NoInstallOnUnprotected":"true",
+		"SuppressRestartServer":"true",
+		"SuppressRestartWorkstation":"false",
+		"UseBranchCache":"true",
+		"UseUtc":"false",
+		"UserNotification":"DisplayAll",
+		"VerboseLevel":"AllMessages"
+	}
+],
+"templatesets":[
+	{
+		"name":"MasterSet",
+		"additionaldeployments":[
+			{
+				"CollectionName":"$updatePrefix$workstationPilot 2",
+				"AvailableTime":"2",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationPilot 3",
+				"AvailableTime":"4",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 1",
+				"AvailableTime":"7",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 2",
+				"AvailableTime":"8",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 3",
+				"AvailableTime":"9",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 4",
+				"AvailableTime":"10",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 5",
+				"AvailableTime":"11",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 6",
+				"AvailableTime":"12",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 7",
+				"AvailableTime":"13",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 8",
+				"AvailableTime":"14",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 9",
+				"AvailableTime":"15",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 10",
+				"AvailableTime":"16",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd Exclude",
+				"AvailableTime":"12",
+				"AvailableTimeUnit":"Months",
+				"DeadlineTime":"12",
+				"DeadlineTimeUnit":"Months",
+				"Template":"Master"
+			}
+		]
 	}
 ],
 "automaticdeploymentrules":[
 	{
-		"Name":"All Workstation Updates",
-		"CollectionName":"Updates: Workstation Test",
+		"Name":"All Workstation Updates 2 ($ScheduleType)",
+		"CollectionName":"$updatePrefix$workstationPilot 1",
 		"DeploymentPackageName":"All Workstation Updates",
 		"AddToExistingSoftwareUpdateGroup":"true",
-		"AllowRestart":"false",
-		"AllowSoftwareInstallationOutsideMaintenanceWindow":"false",
 		"AvailableTime":"2",
 		"AvailableTimeUnit":"Hours",
-		"DeadlineTime":"2",
-		"DeadlineTimeUnit":"Days",
 		"DeployWithoutLicense":"false",
 		"Description":"All Workstation Updates",
 		"DownloadFromInternet":"true",
 		"Enable":"true",
 		"EnabledAfterCreate":"true",
 		"LanguageSelection":"English",
-		"NoInstallOnRemote":"false",
-		"NoInstallOnUnprotected":"true",
-		"Product":"'Windows 7','Windows 10','Silverlight'",
+		"Product":"'Windows 7','Windows 10','Silverlight','Windows 10, version 1903 and later'",
 		"RunType":"RunTheRuleOnSchedule",
-		"Schedule":"patchtuesday",
+		"Schedule":"patchtuesdayplusoneweek",
 		"Superseded":"false",
-		"SuppressRestartServer":"true",
-		"SuppressRestartWorkstation":"false",
 		"UpdateClassification":"'Critical Updates', 'Security Updates', 'Update Rollups', 'Updates'",
-		"UseBranchCache":"true",
-		"UseUtc":"false",
-		"UserNotification":"DisplayAll",
-		"VerboseLevel":"AllMessages",
-		"additionaldeployments":[
-			{
-				"CollectionName":"Updates: Workstation All",
-				"AllowRestart":"false",
-				"AllowSoftwareInstallationOutsideMaintenanceWindow":"false",
-				"AvailableTime":"3",
-				"AvailableTimeUnit":"Days",
-				"DeadlineTime":"10",
-				"DeadlineTimeUnit":"Days",
-				"EnableDeployment":"false",
-				"NoInstallOnRemote":"false",
-				"NoInstallOnUnprotected":"true",
-				"SuppressRestartServer":"true",
-				"SuppressRestartWorkstation":"false",
-				"UseBranchCache":"true",
-				"UseUtc":"false",
-				"UserNotification":"DisplayAll",
-				"VerboseLevel":"AllMessages"
-			},
-			{
-				"CollectionName":"Updates: Workstation Exclusions",
-				"AllowRestart":"false",
-				"AllowSoftwareInstallationOutsideMaintenanceWindow":"false",
-				"AvailableTime":"3",
-				"AvailableTimeUnit":"Days",
-				"DeadlineTime":"12",
-				"DeadlineTimeUnit":"Months",
-				"EnableDeployment":"false",
-				"NoInstallOnRemote":"false",
-				"NoInstallOnUnprotected":"true",
-				"SuppressRestartServer":"true",
-				"SuppressRestartWorkstation":"false",
-				"UseBranchCache":"true",
-				"UseUtc":"false",
-				"UserNotification":"DisplayAll",
-				"VerboseLevel":"AllMessages"
-			}
-		]
+		"Template":"Master",
+		"TemplateSet":"MasterSet"
 	},
 	{
-		"name":"All Server Updates",
-		"CollectionName":"Updates: Server Test",
-		"DeploymentPackageName":"All Server Updates",
-		"AddToExistingSoftwareUpdateGroup":"true",
-		"AllowRestart":"false",
-		"AllowSoftwareInstallationOutsideMaintenanceWindow":"false",
-		"AvailableTime":"2",
-		"AvailableTimeUnit":"Hours",
-		"DeadlineTime":"2",
-		"DeadlineTimeUnit":"Days",
-		"DeployWithoutLicense":"false",
-		"Description":"All Server Updates",
-		"DownloadFromInternet":"true",
-		"Enable":"true",
-		"EnabledAfterCreate":"true",
-		"LanguageSelection":"English",
-		"NoInstallOnRemote":"false",
-		"NoInstallOnUnprotected":"true",
-		"Product":"'Windows Server 2012 R2','Windows Server 2016','Silverlight'",
-		"RunType":"RunTheRuleOnSchedule",
-		"Schedule":"patchtuesday",
-		"Superseded":"false",
-		"SuppressRestartServer":"false",
-		"SuppressRestartWorkstation":"true",
-		"UpdateClassification":"'Critical Updates', 'Security Updates', 'Update Rollups', 'Updates'",
-		"UseBranchCache":"true",
-		"UseUtc":"false",
-		"UserNotification":"DisplayAll",
-		"VerboseLevel":"AllMessages",
-		"additionaldeployments":[
-			{
-				"CollectionName":"Updates: Server All",
-				"AllowRestart":"false",
-				"AllowSoftwareInstallationOutsideMaintenanceWindow":"false",
-				"AvailableTime":"3",
-				"AvailableTimeUnit":"Days",
-				"DeadlineTime":"10",
-				"DeadlineTimeUnit":"Days",
-				"EnableDeployment":"false",
-				"NoInstallOnRemote":"false",
-				"NoInstallOnUnprotected":"true",
-				"SuppressRestartServer":"false",
-				"SuppressRestartWorkstation":"true",
-				"UseBranchCache":"true",
-				"UseUtc":"false",
-				"UserNotification":"DisplayAll",
-				"VerboseLevel":"AllMessages"
-			},
-			{
-				"CollectionName":"Updates: Server Exclusions",
-				"AllowRestart":"false",
-				"AllowSoftwareInstallationOutsideMaintenanceWindow":"false",
-				"AvailableTime":"3",
-				"AvailableTimeUnit":"Days",
-				"DeadlineTime":"12",
-				"DeadlineTimeUnit":"Months",
-				"EnableDeployment":"false",
-				"NoInstallOnRemote":"false",
-				"NoInstallOnUnprotected":"true",
-				"SuppressRestartServer":"true",
-				"SuppressRestartWorkstation":"true",
-				"UseBranchCache":"true",
-				"UseUtc":"false",
-				"UserNotification":"DisplayAll",
-				"VerboseLevel":"AllMessages"
-			}
-		]
-	},
-	{
-		"name":"All Office Updates",
-		"CollectionName":"Updates: Workstation Test",
+		"Name":"All Office Updates 2 ($ScheduleType)",
+		"CollectionName":"$updatePrefix$workstationPilot 1",
 		"DeploymentPackageName":"All Office Updates",
 		"AddToExistingSoftwareUpdateGroup":"true",
-		"AllowRestart":"false",
-		"AllowSoftwareInstallationOutsideMaintenanceWindow":"false",
 		"AvailableTime":"2",
 		"AvailableTimeUnit":"Hours",
-		"DeadlineTime":"2",
-		"DeadlineTimeUnit":"Days",
 		"DeployWithoutLicense":"false",
 		"Description":"All Office Updates",
 		"DownloadFromInternet":"true",
 		"Enable":"true",
 		"EnabledAfterCreate":"true",
 		"LanguageSelection":"English",
-		"NoInstallOnRemote":"false",
-		"NoInstallOnUnprotected":"true",
-		"Product":"'Office 365 Client'",
+		"Product":"'Office 365 Client','Office 2010','Office 2013'",
 		"RunType":"RunTheRuleOnSchedule",
-		"Schedule":"patchtuesday",
+		"Schedule":"patchtuesdayplusoneweek",
 		"Superseded":"false",
-		"SuppressRestartServer":"true",
-		"SuppressRestartWorkstation":"false",
 		"UpdateClassification":"'Critical Updates', 'Security Updates', 'Update Rollups', 'Updates'",
-		"UseBranchCache":"true",
-		"UseUtc":"false",
-		"UserNotification":"DisplayAll",
-		"VerboseLevel":"AllMessages",
-		"additionaldeployments":[
-			{
-				"CollectionName":"Updates: Workstation All",
-				"AllowRestart":"false",
-				"AllowSoftwareInstallationOutsideMaintenanceWindow":"false",
-				"AvailableTime":"3",
-				"AvailableTimeUnit":"Days",
-				"DeadlineTime":"10",
-				"DeadlineTimeUnit":"Days",
-				"EnableDeployment":"false",
-				"NoInstallOnRemote":"false",
-				"NoInstallOnUnprotected":"true",
-				"SuppressRestartServer":"true",
-				"SuppressRestartWorkstation":"false",
-				"UseBranchCache":"true",
-				"UseUtc":"false",
-				"UserNotification":"DisplayAll",
-				"VerboseLevel":"AllMessages"
-			},
-			{
-				"CollectionName":"Updates: Workstation Exclusions",
-				"AllowRestart":"false",
-				"AllowSoftwareInstallationOutsideMaintenanceWindow":"false",
-				"AvailableTime":"3",
-				"AvailableTimeUnit":"Days",
-				"DeadlineTime":"12",
-				"DeadlineTimeUnit":"Months",
-				"EnableDeployment":"false",
-				"NoInstallOnRemote":"false",
-				"NoInstallOnUnprotected":"true",
-				"SuppressRestartServer":"true",
-				"SuppressRestartWorkstation":"false",
-				"UseBranchCache":"true",
-				"UseUtc":"false",
-				"UserNotification":"DisplayAll",
-				"VerboseLevel":"AllMessages"
-			}
-		]
+		"Template":"Master",
+		"TemplateSet":"MasterSet"
+	},
+	{
+		"Name":"All Patch My PC Updates 2 ($ScheduleType)",
+		"CollectionName":"$updatePrefix$workstationPilot 1",
+		"DeploymentPackageName":"All Patch My PC Updates",
+		"AddToExistingSoftwareUpdateGroup":"true",
+		"AvailableTime":"2",
+		"AvailableTimeUnit":"Hours",
+		"DeployWithoutLicense":"false",
+		"Description":"All Patch My PC Updates",
+		"DownloadFromInternet":"true",
+		"Enable":"true",
+		"EnabledAfterCreate":"true",
+		"LanguageSelection":"English",
+		"RunType":"RunTheRuleOnSchedule",
+		"Schedule":"patchtuesdayplusoneweek",
+		"Superseded":"false",
+		"UpdateClassification":"'Critical Updates', 'Security Updates', 'Update Rollups', 'Updates'",
+		"Vendor":"Microsoft",
+		"Template":"Master",
+		"TemplateSet":"MasterSet"
 	}
 ]
 }}
