@@ -1,18 +1,21 @@
 <?xml version="1.0"?>
 <Startup>
 	<PreReq Type="Service" Condition="MustExist">BITS</PreReq>
-	<Option Name="LocalAdmin" >lab1/dadmin</Option>
+	<Option Name="LocalAdmin">lab1/dadmin</Option>
 	<Option Name="SiteCode" >100</Option>
-	<Option Name="CacheSize">8120</Option>
-	<Option Name="AgentVersion">5.00.8355.1000</Option>
+	<Option Name="CacheSize">10240</Option>
+	<Option Name="AgentVersion">5.00.8853.1000</Option>
 	<Option Name="MinimumInterval">0</Option>
-	<Option Name="ClientLocation">\\cm1\ConfigMgr\Client\Install</Option>
+	<Option Name="ClientLocation">\\cm100\ConfigMgr\Client\Install</Option>
 	<Option Name="MaxLogFile">2048</Option>
 	<Option Name="ErrorLocation">\\cm100\ConfigMgr\Client\ErrorLogs</Option>
-	<Option Name="AutoHotfix">\\cm100\ConfigMgr\Client\Hotfixes</Option>
+	<!-- <Option Name="AutoHotfix">\\cm100\ConfigMgr\Client\Hotfixes</Option> -->
 	<Option Name="Delay" >5</Option>
+	<!-- <Option Name="Debug">1</Option> -->
+	<!-- <Option Name="SiteReassign">1</Option> -->
 	<InstallProperty Name="FSP"></InstallProperty>
-	<InstallProperty Name="SMSMP"></InstallProperty>
+	<InstallProperty Name="SMSMP">cm101.lab1.configmgrftw.com</InstallProperty>
+	<CCMSetupParameter Name="mp">cm101.lab1.configmgrftw.com</CCMSetupParameter>
 	<CCMSetupParameter Name="BITSPriority">HIGH</CCMSetupParameter>
 	<ServiceCheck Name="BITS" State="Running" StartMode="Auto" Enforce="True" />
 	<ServiceCheck Name="winmgmt" State="Running" StartMode="Auto" Enforce="True" />

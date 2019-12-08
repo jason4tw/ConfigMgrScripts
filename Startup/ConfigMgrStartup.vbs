@@ -1,5 +1,5 @@
 ' ConfigMgr Startup Script
-' Version 1.84
+' Version 1.85
 ' Jason Sandys
 ' https://home.configmgrftw.com
 '
@@ -70,6 +70,8 @@
 '			set to zero.
 ' 1.84		Fixed two typo bugs
 '			Renamed script file to not include the version number
+' 1.85		Add site code reassignment option if the current site code does not match. This is a forced
+'			reassignment by adding /forceinstall and RESETKEYINFOMRATION=TRUE to the ccmsetup command-line
 
 Option Explicit
 
@@ -87,17 +89,19 @@ Const OPTION_CACHESIZE =					"CacheSize"
 
 Const OPTION_INSTALLPATH = 					"ClientLocation"
 Const OPTION_SITECODE =						"SiteCode"
+Const OPTION_DEBUG = 						"Debug"
 Const OPTION_MAXLOGFILE_SIZE =				"MaxLogFile"
 Const OPTION_ERROR_LOCATION =				"ErrorLocation"
 Const OPTION_AUTOHOTFIX =					"AutoHotfix"
 Const OPTION_STARTUPDELAY =					"Delay"
+Const OPTION_REASSIGNSITE = 				"SiteReassign"
 Const OPTION_WMISCRIPT =					"WMIScript"
 Const OPTION_WMISCRIPT_ASYNCH =				"WMIScriptAsynch"
 Const OPTION_WMISCRIPTOPTIONS =				"WMIScriptOptions"
 
 Const DEFAULT_REGISTRY_LOCATION =			"HKLM\Software\ConfigMgrStartup"
 Const DEFAULT_LOCALADMIN_GROUP = 			"Administrators"
-Const DEFAULT_AGENTVERSION =				"4.00.6487.2000"
+Const DEFAULT_AGENTVERSION =				"5.0.8692.1000"
 Const DEFAULT_UAGENTVERSION =				"0.00.0000.0000"
 Const DEFAULT_RUN_INTERVAL =				12
 Const DEFAULT_CACHESIZE =					"0"
@@ -244,6 +248,7 @@ Const MSG_OS_ARCHITECTURE =					" *Detected OS Architecture is: "
 Const MSG_CHECKASSIGNMENT_START =			"START: Checking client assignment..."
 Const MSG_CHECKASSIGNMENT_OK =				" *Client assigned to site " 
 Const MSG_CHECKASSIGNMENT_NOTOK =			" *Client not assigned to site, initiaing (re-)install"
+Const MSG_CHECKASSIGNMENT_MISMATCH =		" *Client not assigned to expected site of "
 
 If Not InWinPE And IsAdmin Then
 	Main
@@ -260,6 +265,7 @@ Sub Main
 	Dim preReqs
 	Dim clientError
 	Dim lastResult
+	Dim siteCodeAsExpected
 	
 	clientError = False
 	g_startTime = Now
@@ -298,8 +304,8 @@ Sub Main
 						clientError = True
 					End If
 					
-					If CheckClient(configOptions) = False Then
-						If Not InstallClient(configOptions, msiProperties, ccmsetupParams) Then
+					If CheckClient(configOptions, siteCodeAsExpected) = False Then
+						If Not InstallClient(configOptions, msiProperties, ccmsetupParams, siteCodeAsExpected) Then
 							clientError = True
 						End If				
 					ElseIf configOptions.Exists(OPTION_CACHESIZE) Then
@@ -1472,8 +1478,8 @@ Sub CheckCacheDuringStartup(ByRef options)
 
 End Sub
 
-Function CheckAssignment
-	Dim smsClient, siteCode
+Function CheckAssignment(ByRef expSiteCode, ByRef assSiteCode)
+	Dim smsClient
 	Dim errorCode
 	
 	WriteLogMsg MSG_CHECKASSIGNMENT_START, 1, 1, 1
@@ -1485,15 +1491,19 @@ Function CheckAssignment
 	
 	errorCode = Err.Number
 	
-	siteCode = smsClient.GetAssignedSite
-	
+	assSiteCode = smsClient.GetAssignedSite
+		
 	On Error Goto 0
 	
-	If Len(siteCode) = 0 Or errorCode <> 0 Then
-		WriteLogMsg MSG_CHECKASSIGNMENT_NOTOK & siteCode, 1, 1, 0
+	If Len(assSiteCode) = 0 Or errorCode <> 0 Then
+		WriteLogMsg MSG_CHECKASSIGNMENT_NOTOK & assSiteCode, 2, 1, 0
 		CheckAssignment = False
-	Else
-		WriteLogMsg MSG_CHECKASSIGNMENT_OK & siteCode, 1, 1, 0
+	ElseIf expSiteCode <> "0" And expSiteCode <> assSiteCode Then
+		WriteLogMsg MSG_CHECKASSIGNMENT_OK & assSiteCode, 1, 1, 0
+		WriteLogMsg MSG_CHECKASSIGNMENT_MISMATCH & expSiteCode, 2, 1, 0
+		CheckAssignment = False
+	Else 
+		WriteLogMsg MSG_CHECKASSIGNMENT_OK & assSiteCode, 1, 1, 0
 		CheckAssignment = True
 	End If
 
@@ -1501,11 +1511,12 @@ Function CheckAssignment
 
 End Function
 
-Function CheckClient(ByRef options)
+Function CheckClient(ByRef options, ByRef siteCodeMatches)
 	Dim wmi, ccmWMI, errorCode, errorMsg
 	Dim clientProperties, clientProp
 	Dim clientVersion, expectedVersion, expectedUnpatchedversion
 	Dim configMgrLogPath, configMgrLogFilePath, configMgrOldLogFilePath
+	Dim assignedSiteCode, expectedSiteCode
 	
 	clientVersion = "0"
 	configMgrLogPath = ""
@@ -1625,7 +1636,14 @@ Function CheckClient(ByRef options)
 	
 	On Error Goto 0
 	
-	CheckClient = CheckAssignment
+	siteCodeMatches = True
+	expectedSiteCode = GetOptionValue(OPTION_SITECODE, "0", options)
+
+	CheckClient = CheckAssignment(expectedSiteCode, assignedSiteCode)
+
+	If expectedSiteCode <> "0" And expectedSiteCode <> assignedSiteCode Then
+		siteCodeMatches = False
+	End If
     
     Set wmi = Nothing
     Set ccmWMI = Nothing
@@ -1653,7 +1671,7 @@ Function CheckClientVersion(ByVal expectedVersion, ByVal currentVersion)
 
 End Function
 
-Function InstallClient(ByRef options, ByRef properties, ByRef parameters)
+Function InstallClient(ByRef options, ByRef properties, ByRef parameters, ByVal siteCodeMatches)
 	Dim fsp, mp, slp, cacheSize, siteCode
 	Dim possiblePaths, possiblePathCount, possiblePathIndexStart, possiblePathIndex, pathFound
 	Dim commandLine
@@ -1727,6 +1745,11 @@ Function InstallClient(ByRef options, ByRef properties, ByRef parameters)
 			
 		Next
 
+		' Version 1.85
+		If options.Exists(OPTION_REASSIGNSITE) And (Not siteCodeMatches) And options.Item(OPTION_REASSIGNSITE) = 1 Then
+			commandLine = commandLine & " /forceinstall"
+		End If
+
 		If cacheSize > 0 Then
 			commandLine = commandLine & " SMSCACHESIZE=" & cacheSize
 		End If
@@ -1761,6 +1784,10 @@ Function InstallClient(ByRef options, ByRef properties, ByRef parameters)
 				commandLine = commandLine & " " & prop & "=" & properties.Item(prop)
 			End If
 		Next
+
+		If options.Exists(OPTION_REASSIGNSITE) And (Not siteCodeMatches) And options.Item(OPTION_REASSIGNSITE) = 1 Then
+			commandLine = commandLine & " RESETKEYINFORMATION=TRUE"
+		End If
 		
 		If options.Exists(OPTION_AUTOHOTFIX) Then
 			If Len(installPatchProperty) > 0 Then
@@ -1803,8 +1830,12 @@ Function InstallClient(ByRef options, ByRef properties, ByRef parameters)
 		WriteLogMsg MSG_INSTALLCLIENT_COMMANDLINE & commandLine, 1, 1, 0
 		
 		g_WshShell.Environment("PROCESS").Item("SEE_MASK_NOZONECHECKS") = 1
-		returnCode = g_WshShell.Run(commandLine, 0, True)
-		'returnCode = 0
+		
+		If options.Exists(OPTION_DEBUG) And options.Item(OPTION_DEBUG) = 1 Then
+			returnCode = 0
+		Else
+			returnCode = g_WshShell.Run(commandLine, 0, True)
+		End If
 		
 		g_WshShell.Environment("PROCESS").Remove("SEE_MASK_NOZONECHECKS")
 		If returnCode <> 0 Then
