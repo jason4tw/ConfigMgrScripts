@@ -20,12 +20,11 @@
         
     .PARAMETER ForceCleanup
         Forces the cleanup of boundaries and boundary groups even if they
-        contain or are contained in other boundaries or boundary groups. This switch has no meaning
-        if the Cleanup paremeter is set to 'None'.
+        contain or are contained in other boundaries or boundary groups.
 
     .PARAMETER Restore
         Restores collections and boundary groups to their data file defined state by
-        removing all collection query rules and boundary group members not defined in the data file.
+        removing all collection query rules, boundary group members, and site systems not defined in the data file.
 
     .PARAMETER Collections
         If specified, also creates corresponding location and type collections.
@@ -43,10 +42,15 @@
         Creates boundaries and boundary groups defined in the data2.csv data file.
 		
 	.NOTES
-		Version 2.0
+		Version 2.1
         Jason Sandys
 
         Version History
+        - 2.1 (17 December 2019):
+            - Updated restore functionality to list boundaries in boundary groups and query rules in collections that don't
+              exist in data file.
+            - Updated boundary group and collection creation to not delete and re-create rules in the data file
+            - Added site system addition to boundary groups and restore.
         - 2.0 (15 December 2019): Major overhaul including:
             - Dynamic column consumption
             - COllection folder creation and cleanup
@@ -107,6 +111,7 @@ function Read-SubnetInfo
         [Parameter(ValueFromPipeline=$true)]
         [object] $data,
         [hashtable] $Subnets,
+        [hashtable] $SiteSystems,
         [hashtable] $Columns,
         [string] $KeyColumn
     )
@@ -116,9 +121,10 @@ function Read-SubnetInfo
         $overlap = $false
         $subnetID = ($data.SubnetID).Trim()
         $subnetMask = ($data.SubnetMask).Trim()
+        $siteSystemsForItem = ($data.SiteSystems).Trim()
 
-        $subnetInfo = Get-NetworkSummary -IPAddress $subnetID -SubnetMask $SubnetMask
-        
+        $subnetInfo = Get-NetworkSummary -IPAddress $subnetID -SubnetMask $subnetMask
+
         foreach ($col in $additionalColumns)
         {
             $value = $data.$col
@@ -174,6 +180,18 @@ function Read-SubnetInfo
                 else
                 {
                     ($Columns.$col).Add($subnetInfo.$col, $subnetInfo.CIDRNotation)
+                }
+
+                if($siteSystemsForItem.Length -gt 0)
+                {
+                    if(($SiteSystems.$col).Contains($subnetInfo.$col))
+                    {
+                        ($SiteSystems.$col.($subnetInfo.$col)) += ",$siteSystemsForItem"
+                    }
+                    else
+                    {
+                        ($SiteSystems.$col).Add($subnetInfo.$col, $siteSystemsForItem)
+                    }
                 }
             }
         }
@@ -263,7 +281,8 @@ param (
     [Parameter(ValueFromPipeline=$true)]
     [System.Collections.DictionaryEntry] $Item,
     [string] $BoundaryGroupCategory,
-    [hashtable] $Boundaries
+    [hashtable] $Boundaries,
+    [hashtable] $SiteSystems
 )
 
     process
@@ -280,32 +299,94 @@ param (
         else
         {
             Write-Host " = Boundary group already exists: $boundaryGroupName"
-            Write-Host "  - Removing existing boundaries ..."
- 
-            $boundariesToRemove = Get-CMBoundary -BoundaryGroupName $boundaryGroupName
-
-            if(-not ($Restore))
-            {
-                $boundariesToRemove = $boundariesToRemove | Where-Object {$_.DisplayName -like "$Prefix*"}
-            }
-
-            $boundariesToRemove | ForEach-Object { Remove-CMBoundaryFromGroup -BoundaryId $_.BoundaryID -BoundaryGroupId $boundaryGroup.GroupID -Force -WhatIf:$WhatIf }
         }
 
         if($boundaryGroup)
         {
+            $currentBoundaries = (Get-CMBoundary -BoundaryGroupName $boundaryGroupName).DisplayName
+            $autoBoundaries = New-Object -TypeName "System.Collections.ArrayList"
+
             $categorySubnets = $Item.Value -split ',' 
 
             foreach ($subnet in $categorySubnets)
             {
                 if($Boundaries.ContainsKey($subnet))
                 {
-                    Write-Host "  + Adding boundary '$(($Boundaries.Item($subnet)).DisplayName)' to boundary group"
-                    Add-CMBoundaryToGroup -BoundaryGroupId $boundaryGroup.GroupId -BoundaryId ($Boundaries.Item($subnet)).BoundaryID -WhatIf:$WhatIf
+                    if($currentBoundaries -notcontains ($Boundaries.Item($subnet)).DisplayName)
+                    {
+                        Write-Host "   + Adding boundary '$(($Boundaries.Item($subnet)).DisplayName)' to boundary group"
+                        Add-CMBoundaryToGroup -BoundaryGroupId $boundaryGroup.GroupId -BoundaryId ($Boundaries.Item($subnet)).BoundaryID -WhatIf:$WhatIf
+                    }
+                    else 
+                    {
+                        Write-Host "   = Boundary '$(($Boundaries.Item($subnet)).DisplayName)' already exists in boundary group"
+                    }
+
+                    $autoBoundaries.Add(($Boundaries.Item($subnet)).DisplayName) | Out-Null
                 }
                 else
                 {
-                    Write-Warning " Boundary not found for subnet '$subnet'"
+                    Write-Warning "   ! Boundary not found for subnet '$subnet'"
+                }
+            }
+
+            foreach($boundaryName in $currentBoundaries)
+            {
+                if($autoBoundaries -notcontains $boundaryName)
+                {
+                    if($Restore)
+                    {
+                        Write-Host "   x Removing boundary '$boundaryName' as it exists in boundary group but not the data file"
+                        Remove-CMBoundaryFromGroup -BoundaryGroupId $boundaryGroup.GroupID -BoundaryName $boundaryName -Force
+                    }
+                    else
+                    {
+                        Write-Host "   ~ Boundary '$boundaryName' exists in boundary group but not the data file"
+                    }
+                }
+            }
+
+            $currentSiteSystems = ((Get-WmiObject -Namespace "root\sms\site_$siteCode" `
+             -Class SMS_BoundaryGroupSiteSystems `
+             -Filter  "GroupID='$($boundaryGroup.GroupID)'").ServerNALPath)
+            
+            if($currentSiteSystems)
+            {
+                $currentSiteSystems = $currentSiteSystems | ForEach-Object { ($_ -split '\\')[5] }
+            } 
+
+            $desiredSiteSystems = ($SiteSystems.($Item.Name) -split ',' | Sort-Object -Unique)
+
+            if(($SiteSystems.($Item.Name)).Length -gt 0)
+            {
+                foreach($siteSystem in $desiredSiteSystem)
+                {
+                    if($currentSiteSystems -notcontains $siteSystem)
+                    {
+                        Write-Host "   + Adding Site System '$siteSystem' to the boundary group"
+                        Set-CMBoundaryGroup -Id $boundaryGroup.GroupID -AddSiteSystemServerName $siteSystem
+
+                    }
+                    else
+                    {
+                        Write-Host "   = Site System '$siteSystem' already exists in boundary group"
+                    }
+                }
+            }
+
+            foreach($siteSystem in $currentSiteSystems)
+            {
+                if($desiredSiteSystems -notcontains $siteSystem)
+                {
+                    if($Restore)
+                    {
+                        Write-Host "   - Removing Site System '$siteSystem' exists in boundary group but not the data file"                        
+                        Set-CMBoundaryGroup -Id $boundaryGroup.GroupID -RemoveSiteSystemServerName $siteSystem
+                    }
+                    else
+                    {
+                        Write-Host "   ~ Site System '$siteSystem' exists in boundary group but not the data file"                        
+                    }
                 }
             }
 
@@ -406,26 +487,7 @@ function New-Collection
 
         $collection = Get-CMCollection -Name $collectionName
 
-        if($collection)
-        {
-            Write-Host " = Collection already exists: $collectionName ..."
-            Write-Host "  - Removing existing membership rules ..."
-
-            if($WhatIf -ne $true)
-            {
-                # Remove all existing membership rules
-                $rulesToRemove = Get-CMDeviceCollectionQueryMembershipRule -CollectionId $collection.CollectionID
-
-                if(-not($Restore))
-                {
-                    $rulesToRemove = $rulesToRemove | Where-Object { $_.RuleName -like "$Prefix*" }    
-                }
-
-                $rulesToRemove | ForEach-Object { Remove-CMDeviceCollectionQueryMembershipRule -CollectionId $collection.CollectionID -Force -RuleName $_.RuleName }
-            }
-        }
-        #Target collection does not yet exist, create it
-        else
+        if(-not($collection))
         {
             Write-Host " + Creating new collection: $collectionName ..."
             if($WhatIf -ne $true)
@@ -436,6 +498,10 @@ function New-Collection
                     -RefreshType Periodic `
                     -RefreshSchedule $updateSchedule
             }
+        }
+        else
+        {
+            Write-Host " = Collection already exists: $collectionName ..."
         }
 
         $collection
@@ -483,14 +549,43 @@ function Add-BoundaryGroupQueryRuleToCollection
 		[object] $BoundaryGroup
 	)
 
-    Write-Host "  + Adding query rule for '$($BoundaryGroup.Name)' to $($Collection.Name)"
-    $boundaryGroupID = $BoundaryGroup.GroupID
+    $currentRules = (Get-CMDeviceCollectionQueryMembershipRule -CollectionId $Collection.CollectionID).RuleName
 
-    $queryRule = $ExecutionContext.InvokeCommand.ExpandString($queryTemplate)
-    Add-CMDeviceCollectionQueryMembershipRule `
-        -CollectionId $Collection.CollectionID `
-        -RuleName $BoundaryGroup.Name `
-        -QueryExpression $queryRule			
+    if($currentRules -notcontains $BoundaryGroup.Name)
+    {
+        Write-Host "   + Adding query rule for '$($BoundaryGroup.Name)'"
+        #boundaryGroupID is referenced in $queryTemplate
+        $boundaryGroupID = $BoundaryGroup.GroupID
+
+        $queryRule = $ExecutionContext.InvokeCommand.ExpandString($queryTemplate)
+        Add-CMDeviceCollectionQueryMembershipRule `
+            -CollectionId $Collection.CollectionID `
+            -RuleName $BoundaryGroup.Name `
+            -QueryExpression $queryRule
+    }
+    else
+    {
+        Write-Host "   = Query rule for '$($BoundaryGroup.Name)' already exists" 
+    }
+
+    foreach ($rule in $currentRules)
+    {
+        if($rule -ne $BoundaryGroup.Name)
+        {
+            if($Restore)
+            {
+                Write-Host "   x Removing query rule named '$rule' as it exists but is not in the data file"             
+                Remove-CMDeviceCollectionQueryMembershipRule `
+                 -CollectionId $Collection.CollectionID `
+                 -RuleName $rule `
+                 -Force
+            }
+            else
+            {
+                Write-Host "   ~ Query rule named '$rule' exists but not in the data file"             
+            }
+        }
+    }
 }
 
 function Invoke-CollectionCheck
@@ -557,6 +652,7 @@ function Invoke-FolderCheck
             
             if($Clean)
             {
+                #$ItemType is reference in $CollectionNamePrefix
                 $ItemType = $childFolder.Name
                 $collectionNamePrefixToFind = $ExecutionContext.InvokeCommand.ExpandString($collectionNamePrefix)
                 
@@ -634,15 +730,28 @@ $queryTemplate = 'select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS
 # **********************************************************************************
 
 $boundaryGroupCategories = @{}
+$siteSystems = @{}
 
 foreach($category in $boundaryGroupCategoryNames)
 {
     $boundaryGroupCategories.Add($category, @{})
+    $siteSystems.Add($category, @{})
 }
 
 Write-Host "Loading subnet, location, and type information from data file ..."
 $config = Import-Csv -Path $DataFile
-$config |  Read-SubnetInfo -Subnets $subnets -Columns $boundaryGroupCategories -KeyColumn $keyCategory #-Locations $locations -Types $types
+$config |  Read-SubnetInfo -Subnets $subnets -Columns $boundaryGroupCategories -KeyColumn $keyCategory -SiteSystems $siteSystems
+
+# foreach ($s in $siteSystems.Keys)
+# {
+#     $siteSystems.$s
+
+#     foreach($ss in $siteSystems.$s.Keys)
+#     {
+#         (($siteSystems.$s.$ss -split ',') | Sort-Object -Unique) -join ','
+#     }
+# }
+
 
 Push-Location $siteCode":"
 
@@ -655,8 +764,9 @@ foreach($category in $boundaryGroupCategories.Keys)
 {
     Write-Host ""
     Write-Host "Processing boundary groups based on $category ..."
-    ($boundaryGroupCategories.$category).GetEnumerator() | New-BoundaryGroup -BoundaryGroupCategory $category -Boundaries $boundaries `
-    | ForEach-Object { $boundaryGroups.Add($_.Name, $_) }
+    ($boundaryGroupCategories.$category).GetEnumerator() `
+     | New-BoundaryGroup -BoundaryGroupCategory $category -Boundaries $boundaries -SiteSystems $siteSystems.$category `
+     | ForEach-Object { $boundaryGroups.Add($_.Name, $_) }
 }
 
 Write-Host ""
@@ -686,13 +796,15 @@ if($Collections)
          | ForEach-Object { $category = $_; New-ConsoleFolder -ParentPath $targetFolderPath -FolderName $category } `
          | ForEach-Object { $categoryCollectionFolders.Add($category, $_) }
 
-        foreach($category in $boundaryGroupCategories.Keys)
+        foreach($boundaryGroupCategory in $boundaryGroupCategories.Keys)
         {
             Write-Host ""
-            Write-Host "Processing collections based on $category ..."
+            Write-Host "Processing collections based on $boundaryGroupCategory ..."
 
-            ($boundaryGroupCategories.$category).GetEnumerator() | ForEach-Object { $boundaryGroupName = "$Prefix$category $($_.Name)"; New-Collection -Item $_ -ItemType $category `
-             | Move-Collection -ConsoleFolder $categoryCollectionFolders.$category | Add-BoundaryGroupQueryRuleToCollection -BoundaryGroup $boundaryGroups.Item($boundaryGroupName) }
+            ($boundaryGroupCategories.$boundaryGroupCategory).GetEnumerator() `
+             | ForEach-Object { $boundaryGroupName = "$Prefix$boundaryGroupCategory $($_.Name)"; New-Collection -Item $_ -ItemType $boundaryGroupCategory `
+             | Move-Collection -ConsoleFolder $categoryCollectionFolders.$boundaryGroupCategory `
+             | Add-BoundaryGroupQueryRuleToCollection -BoundaryGroup $boundaryGroups.Item($boundaryGroupName) }
         }
     }
 
