@@ -1,29 +1,31 @@
 <#
 	.SYNOPSIS
-        Checks DNS for the system names in a data file.
+        Creates a console query from systems listed in a text file.
 	
 	.DESCRIPTION
-		Checks DNS for the system names in a data file including forward and reverse lookups.
+		Creates a console query from systems listed in a text file
         
-        A log file with all activity is generated in the current folder.
-	
 	.PARAMETER DataFile
-        The input data file to use.
+        The input data file to use. If not specified, .\data.txt is used.
 
+    .PARAMETER QueryName
+        The name of the query to create.
+
+    .PARAMETER FolderName
+        The name of the console folder to create the query in. This folder must exist before the script is run.
+        
     .EXAMPLE
-        .\IPCheck.ps1 -DataFile .\sys.txt
-        Performs forward and reverse name lookups on the systems listed in sys.txt.
+        .\New-QueryFromSystemList.ps1 -DataFile .\data2.txt -QueryName "Test Query 1" -FolderName "Test Queries"
 		
 	.NOTES
-		Version 1.1
+		Version 1.0
         Jason Sandys
 
         Version History
-        - 1.1 (15 December 2019): Added progress tracking and pipeline input
-		- 1.0 (Unknown): Initial Version
+		- 1.0 (18 December 2019): Initial Version
 
         Dependencies:
-        - None.
+        - ConfigurationManager PowerShell module and Admin console loaded locally.
         
         Limitations and Issues
 		- None.
@@ -35,100 +37,66 @@ param
 	[Parameter(HelpMessage = 'The data file to use.')]
 	[ValidateScript({ Test-Path -PathType Leaf -Path $_ })]
 	[Alias('data')]
-    [string] $DataFile
+    [string] $DataFile = '.\data.txt',
+    [Parameter(Mandatory=$true,HelpMessage = 'The name fo the query to create.')]
+    [Alias('name')]
+    [string] $QueryName,
+    [Parameter(Mandatory=$true,HelpMessage = 'The name fo the console folder to create the query in.')]
+    [Alias('folder')]
+    [string] $FolderName,
+    [switch] $WhatIf
 )
 
-function Invoke-DNSLookup
+if($WhatIf -eq $true)
 {
-    [CmdletBinding()]
-    param
-    (
-        [Parameter(ValueFromPipeline, HelpMessage = 'The name of the system to lookup in DNS.')]
-        [string] $Name
-    )
+	Write-Host -ForegroundColor DarkBlue -BackgroundColor Yellow "Operating in WhatIf mode, no changes will be made."
+}
 
-    process
+#Load Configuration Manager PowerShell Module
+if(-not(Import-Module -Name ($Env:SMS_ADMIN_UI_PATH.Substring(0, $Env:SMS_ADMIN_UI_PATH.Length - 5) + '\ConfigurationManager.psd1') -PassThru))
+{
+    exit 1
+}
+
+#Get SiteCode
+$siteCode = Get-PSDrive -PSProvider CMSITE
+
+if($FolderName)
+{
+    $folderLocation = Join-Path -Path "${siteCode}:\Query" -ChildPath $FolderName
+
+    if(-not(Test-Path -Path $folderLocation -PathType Container))
     {
-        $systemName = $Name.ToLower().Trim()
-    
-        $systemResult = New-Object PSObject
-        $systemResult | Add-Member -MemberType NoteProperty -Name Name -Value $systemName
-    
-        $systemResult | Add-Member -MemberType NoteProperty -Name IP -Value "-"
-        $systemResult.IP = ([System.Net.DNS]::GetHostEntry($systemName).AddressList | Select-Object -First 1).IPAddressToString
-    
-        $systemResult | Add-Member -MemberType NoteProperty -Name Reverse -Value "-"
-        $systemResult.Reverse = ([System.Net.DNS]::GetHostEntry($systemResult.IP) | Select-Object -First 1).HostName
-        $systemResult.Reverse = ($systemResult.Reverse -split "[.]")[0].ToLower().Trim()
-    
-        $firstOctet = ($systemResult.IP -split "[.]")[0].Trim()
-        if ($systemResult.Reverse -eq $firstOctet)
-        {
-            $systemResult.Reverse = "-"
-        }
-            
-        $systemResult | Add-Member -MemberType NoteProperty -Name Status -Value "-"
-        
-        if ($systemResult.IP -eq "-")
-        {
-            $sys.Status = "Could not Resolve IP"
-        }
-        elseif ($systemResult.Reverse -eq "-")
-        {
-            $systemResult.Status = "IP Address not found in reverse zone"
-        }
-        elseif ($systemResult.Name -ne $systemResult.Reverse)
-        {
-            $systemResult.Status = "IP registered to another system"
-        }
-        else
-        {
-            $systemResult.Status = "OK"
-        }
-        
-        $systemResult
+        Write-Warning "The folder specified does not exist"
+        exit 2 
     }
 }
 
-$ErrorActionPreference = "silentlycontinue"
+$systemList = '"' + ((Get-Content -Path $DataFile) -join '","') + '"'
 
-if($DataFile)
+Push-Location $siteCode":"
+
+$queryExpression = "select SMS_R_System.NetbiosName, SMS_R_System.Client, SMS_R_System.OperatingSystemNameandVersion, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.SystemOUName, SMS_R_System.IPAddresses from  SMS_R_System where SMS_R_System.NetbiosName in ($systemList)"
+
+$query = New-CMQuery -TargetClassName 'SMS_R_System' -Name $QueryName -Expression $queryExpression
+
+if($query)
 {
-    $output = New-Object -TypeName "System.Collections.ArrayList" 
+    Write-Host " * Successfully created query."
 
-    $systemNameList = Get-Content -Path $DataFile
-
-    $total = ($systemNameList | Measure-Object).Count
-    $count = 0
-
-    Write-Progress -Id 1 -Activity "Performing DNS Lookups" -PercentComplete 0
-
-    foreach ($systemName in $systemNameList)
+    if($FolderName)
     {
-        $count++
-
-        Write-Progress -Id 1 -Activity "Performing DNS Lookups" `
-         -CurrentOperation $systemName `
-         -Status "($count / $total)" `
-         -PercentComplete (($count / $total) * 100)
-
-        $result = Invoke-DNSLookup -Name $systemName
-
-        $output.Add($result) | Out-Null
+        Move-CMObject -FolderPath $folderLocation -InputObject $query -OutVariable
     }
-
-    Write-Progress -Id 1 -Activity "Performing DNS Lookups" `
-        -CurrentOperation $systemName `
-        -Completed
-
-    $output
 }
+
+Pop-Location
 
 # SIG # Begin signature block
 # MIIexQYJKoZIhvcNAQcCoIIetjCCHrICAQExDzANBglghkgBZQMEAgEFADB5Bgor
 # BgEEAYI3AgEEoGswaTA0BgorBgEEAYI3AgEeMCYCAwEAAAQQH8w7YFlLCE63JNLG
-# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCAq7g8CqFOL3dQr
-# LHFN+pOB1fHZ6M0WIG5UmJUyHEgcIaCCGawwggSEMIIDbKADAgECAhBCGvKUCYQZ
+# KX7zUQIBAAIBAAIBAAIBAAIBADAxMA0GCWCGSAFlAwQCAQUABCBpk0s/tUTfy49W
+# X1IqaVdSedJ+ncLVzIZ6X9cpYsVGyKCCGawwggSEMIIDbKADAgECAhBCGvKUCYQZ
 # H1IKS8YkJqdLMA0GCSqGSIb3DQEBBQUAMG8xCzAJBgNVBAYTAlNFMRQwEgYDVQQK
 # EwtBZGRUcnVzdCBBQjEmMCQGA1UECxMdQWRkVHJ1c3QgRXh0ZXJuYWwgVFRQIE5l
 # dHdvcmsxIjAgBgNVBAMTGUFkZFRydXN0IEV4dGVybmFsIENBIFJvb3QwHhcNMDUw
@@ -271,23 +239,23 @@ if($DataFile)
 # U0EgQ29kZSBTaWduaW5nIENBAhA5TvozTN3idBbiqiEk4d9aMA0GCWCGSAFlAwQC
 # AQUAoIGEMBgGCisGAQQBgjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwG
 # CisGAQQBgjcCAQQwHAYKKwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwLwYJKoZI
-# hvcNAQkEMSIEICngUmO5jCSGXNuQGae5taaFYtdurH0CvOFxU2mOYl78MA0GCSqG
-# SIb3DQEBAQUABIIBAIIjXNZRI2ZkCt+96tb4NugPDcilNrW7KZ+wQLxV796mtJQU
-# t0D9wsI861b0hMKmTcN9CoQa7NfVs/Yxepoj+YAuqSIKCRJ/Je5dhZjFtDPX/8sC
-# SLRCSHwuKUUzNmjtxjNslI92vtFdLCM9/WRF6VZmI79KpRvZrtIz1dFLlbPMeE43
-# fkNBNzqrofv0Oy85XIOV1gL4xf1jwYsrmU41LnBomYeZFwZWhga9+OY4fw9lnOwe
-# EzRhEGeuOmry4dSM9uey1ZZxH/q7iaYYbGRbMm8FEFyVEtcNtSLBrkGMBOgbhgtb
-# xtcPP+Xzo4JWMYW1LWOfI0HVhRZ2SQvU7rnf2kKhggIoMIICJAYJKoZIhvcNAQkG
+# hvcNAQkEMSIEIIwjQ744op7dETL0PERXtqc3Mm2mMSCL1iazK1riBU8xMA0GCSqG
+# SIb3DQEBAQUABIIBAFArTmvYnYPhCH5PopS1//0lI3sAS0hg23vw5ENhpvmgwkTA
+# UIzsz9vYTycvrcyFSfdhhCqlg4FVpwbZJquer5vFZ1s2jeNXGvtMJgI8Tu5fEF5P
+# MbtVh7D7oLO2ngTEO202W6LUJCH6Tz/uTVbyk/ztfAE2n85dTXuZqbOf9eW3Z+rU
+# N6aZHTnRUc3lagy6gdoVA0XOg+ECTubrdZpVDUSPIg7oOfajD66LzokRCwJ9+9UR
+# Ztqty4wrfJz9hMsACQhQjdvyLDzBSdwSV/MlK45vQqPpA9SlgvedUpU3MMRJNAzQ
+# wRwYfsh8R9Aa2xHeLyIE7QnmjvqofBqf9FFGRrmhggIoMIICJAYJKoZIhvcNAQkG
 # MYICFTCCAhECAQEwgY4wejELMAkGA1UEBhMCR0IxGzAZBgNVBAgTEkdyZWF0ZXIg
 # TWFuY2hlc3RlcjEQMA4GA1UEBxMHU2FsZm9yZDEaMBgGA1UEChMRQ09NT0RPIENB
 # IExpbWl0ZWQxIDAeBgNVBAMTF0NPTU9ETyBUaW1lIFN0YW1waW5nIENBAhArc9t0
 # YxFMWlsySvIwV3JJMAkGBSsOAwIaBQCgXTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcN
-# AQcBMBwGCSqGSIb3DQEJBTEPFw0xOTEyMjAwMTQ4NTZaMCMGCSqGSIb3DQEJBDEW
-# BBRu1kCbyJWfVR+/Il5d1ALWUi168DANBgkqhkiG9w0BAQEFAASCAQBfPoHfsUr7
-# cuNSUB/bnuSkH4i2L6UjS1TLijxOO0o2UoBmOwyu1cjFoe9br41dzZwGap7Hq1ji
-# FOgsXz5549/XEGsWYhajgb7St2PQGUPw0bwbr9K/InUuG3r4TfkF+0ix/95tvF1b
-# YFhomFs7JD78cKv1456K5+03oBTJDrqp+Fr4zkCwI50yY3Xhvm05+iM+9H3UImBG
-# MtxnA9XEJAHk3qBjGFxQJlXTfJ9I1CcvdMoI3N1nJDf7rPx4THWz3Weux87AWzvm
-# GfVjvvs0N5lEyVQHtCwdi9o3N8dFf/VBQ6UzxSJ1To3YPlfIrp6aGgDBb0GOh8dE
-# Cv7lyWaV5bpI
+# AQcBMBwGCSqGSIb3DQEJBTEPFw0xOTEyMjAwMTUwNTVaMCMGCSqGSIb3DQEJBDEW
+# BBQEItNpRUmQ94bpcDqzgPYoBWYpnzANBgkqhkiG9w0BAQEFAASCAQA3ADKHpq3W
+# wwitL2zr+2ea1AJWMvKeWr9dINS1jTDiaYTeqXVlpR4h9CnjPJ7FFG9f3zO5VDbt
+# 3zH/Wg3BDeMyTequ2KJu3wWFVwUuCqIgcAaxtlv6KAnNXih7XEnQuZT6QE1xemrc
+# vFokFNKmtul81fCsLE0JqGi8YbCvAZju0mr/qsYWXa2ZHgUe9/EaPaHc8xBpl84m
+# 1kBenDwm2X9jXoJs0zL2XSw3pUAySdRapa8kIyjBkoGhnASoOVRPj5LhOmi4gnrF
+# f8t343YqldaktjIjTO/KSeHtE+BYmVt+mYQ/qJgc+I5nAkMxEcrxIDmcstV/mYVP
+# MLz8AQMgnGrz
 # SIG # End signature block
