@@ -42,10 +42,12 @@
         Creates boundaries and boundary groups defined in the data2.csv data file.
 		
 	.NOTES
-		Version 2.1
+		Version 2.2
         Jason Sandys
 
         Version History
+        - 2.2 (20 December 2019):
+            - Added ability to add comments to the category based collection.
         - 2.1 (17 December 2019):
             - Updated restore functionality to list boundaries in boundary groups and query rules in collections that don't
               exist in data file.
@@ -113,7 +115,8 @@ function Read-SubnetInfo
         [hashtable] $Subnets,
         [hashtable] $SiteSystems,
         [hashtable] $Columns,
-        [string] $KeyColumn
+        [string] $KeyColumn,
+        [hashtable] $CategoryComments
     )
 
     process
@@ -180,6 +183,18 @@ function Read-SubnetInfo
                 else
                 {
                     ($Columns.$col).Add($subnetInfo.$col, $subnetInfo.CIDRNotation)
+                }
+
+                if($commentsByCategory.Contains($col))
+                {
+                    if(($CategoryComments.$col).Contains($subnetInfo.$col))
+                    {
+                        ($CategoryComments.$col).($subnetInfo.$col) += "$commentSeperator$($subnetInfo.($commentsByCategory.$col))"
+                    }
+                    else
+                    {
+                        ($CategoryComments.$col).Add($subnetInfo.$col, $subnetInfo.($commentsByCategory.$col))        
+                    }
                 }
 
                 if($siteSystemsForItem.Length -gt 0)
@@ -478,7 +493,8 @@ function New-Collection
 	(
         [Parameter(ValueFromPipeline=$true)]
         [System.Collections.DictionaryEntry] $Item,
-        [string] $ItemType
+        [string] $ItemType,
+        [string] $Comments
 	)
 
     process
@@ -502,6 +518,12 @@ function New-Collection
         else
         {
             Write-Host " = Collection already exists: $collectionName ..."
+        }
+
+        if($Comments.Length -gt 0)
+        {
+            Write-Host "   & Settings comments to '$Comments' ..."
+            Set-CMCollection -InputObject $collection -Comment $Comments
         }
 
         $collection
@@ -718,7 +740,7 @@ $subnets = @{}
 $boundaries = @{}
 $boundaryGroups = @{}
 
-# **********************************************************************************
+# Configuration **************************************************************************************
 $boundaryNameTemplate = '$($Subnet.Value.Location) ($($Subnet.Value.SubnetAddresses))'
 $boundaryGroupNamePrefix = '$Prefix$BoundaryGroupCategory '
 $collectionNamePrefix = '${ItemType}: '
@@ -727,7 +749,9 @@ $boundaryGroupCategoryNames = 'Location','Type'
 $additionalColumns = 'SubnetAddresses'
 $columnFilters = @{'Type' = '("$value" -split "/")[0]'}
 $queryTemplate = 'select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client, SMS_G_System_BOUNDARYGROUPCACHE.BoundaryGroupIDs from  SMS_R_System inner join SMS_G_System_BOUNDARYGROUPCACHE on SMS_G_System_BOUNDARYGROUPCACHE.ResourceID = SMS_R_System.ResourceId where SMS_G_System_BOUNDARYGROUPCACHE.BoundaryGroupIDs like "%$boundaryGroupID%"'
-# **********************************************************************************
+$commentsByCategory = @{'Location' = 'Type'}
+$commentSeperator = ', '
+# End Configuration **********************************************************************************
 
 $boundaryGroupCategories = @{}
 $siteSystems = @{}
@@ -738,20 +762,20 @@ foreach($category in $boundaryGroupCategoryNames)
     $siteSystems.Add($category, @{})
 }
 
+$collectionComments = @{}
+
+foreach($category in $commentsByCategory.Keys)
+{
+    $collectionComments.Add($category, @{})
+}
+
 Write-Host "Loading subnet, location, and type information from data file ..."
 $config = Import-Csv -Path $DataFile
-$config |  Read-SubnetInfo -Subnets $subnets -Columns $boundaryGroupCategories -KeyColumn $keyCategory -SiteSystems $siteSystems
-
-# foreach ($s in $siteSystems.Keys)
-# {
-#     $siteSystems.$s
-
-#     foreach($ss in $siteSystems.$s.Keys)
-#     {
-#         (($siteSystems.$s.$ss -split ',') | Sort-Object -Unique) -join ','
-#     }
-# }
-
+$config |  Read-SubnetInfo -Subnets $subnets `
+ -Columns $boundaryGroupCategories `
+ -KeyColumn $keyCategory `
+ -SiteSystems $siteSystems `
+ -CategoryComments $collectionComments
 
 Push-Location $siteCode":"
 
@@ -802,7 +826,8 @@ if($Collections)
             Write-Host "Processing collections based on $boundaryGroupCategory ..."
 
             ($boundaryGroupCategories.$boundaryGroupCategory).GetEnumerator() `
-             | ForEach-Object { $boundaryGroupName = "$Prefix$boundaryGroupCategory $($_.Name)"; New-Collection -Item $_ -ItemType $boundaryGroupCategory `
+             | ForEach-Object { $boundaryGroupName = "$Prefix$boundaryGroupCategory $($_.Name)"; `
+             New-Collection -Item $_ -ItemType $boundaryGroupCategory -Comments $collectionComments.$boundaryGroupCategory.($_.Name) `
              | Move-Collection -ConsoleFolder $categoryCollectionFolders.$boundaryGroupCategory `
              | Add-BoundaryGroupQueryRuleToCollection -BoundaryGroup $boundaryGroups.Item($boundaryGroupName) }
         }
