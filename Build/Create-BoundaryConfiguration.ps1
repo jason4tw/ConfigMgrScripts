@@ -42,10 +42,13 @@
         Creates boundaries and boundary groups defined in the data2.csv data file.
 		
 	.NOTES
-		Version 2.2
+		Version 2.2.1
         Jason Sandys
 
         Version History
+        - 2.2.1 (20 December 2019)
+            - Corrected typo for site system system addition
+            - Remove duplicates from comments added to boundary groups
         - 2.2 (20 December 2019):
             - Added ability to add comments to the category based collection.
         - 2.1 (17 December 2019):
@@ -374,8 +377,10 @@ param (
 
             if(($SiteSystems.($Item.Name)).Length -gt 0)
             {
-                foreach($siteSystem in $desiredSiteSystem)
+                foreach($siteSystem in $desiredSiteSystems)
                 {
+                    Write-Host " *** $siteSystem"
+
                     if($currentSiteSystems -notcontains $siteSystem)
                     {
                         Write-Host "   + Adding Site System '$siteSystem' to the boundary group"
@@ -522,6 +527,7 @@ function New-Collection
 
         if($Comments.Length -gt 0)
         {
+            $Comments = (($Comments -split $commentSeperator | Sort-Object -Unique) -join $commentSeperator)
             Write-Host "   & Settings comments to '$Comments' ..."
             Set-CMCollection -InputObject $collection -Comment $Comments
         }
