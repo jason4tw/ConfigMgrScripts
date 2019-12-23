@@ -16,7 +16,7 @@
         The prefix to use for boundary and boundary group names.
         
     .PARAMETER Cleanup
-        Clean up empty or non-referenced boundaries, boundary groups, and collections.
+        Clean up empty boundary groups and collections or non-referenced boundaries.
         
     .PARAMETER ForceCleanup
         Forces the cleanup of boundaries and boundary groups even if they
@@ -42,10 +42,15 @@
         Creates boundaries and boundary groups defined in the data2.csv data file.
 		
 	.NOTES
-		Version 2.2.1
+		Version 2.3
         Jason Sandys
 
         Version History
+        - 2.3 (23 December 2019)
+            - Added TestParse option to test loading the data file so that missing data and overlaps can be detected
+            - Added missing data checks during data file load
+            - Added setting boundary group flags
+            - Changed "global" configuration variable names to be prefixed with 'config_'
         - 2.2.1 (20 December 2019)
             - Corrected typo for site system system addition
             - Remove duplicates from comments added to boundary groups
@@ -83,7 +88,7 @@ param
     [Parameter(ParameterSetName = "Create Collections")]
     [string] $Prefix = 'Auto: ',
 
-    [Parameter(ParameterSetName='No Collections', HelpMessage = 'Clean up empty or non-referenced boundaries, boundary groups, and collections.')]
+    [Parameter(ParameterSetName='No Collections', HelpMessage = 'Clean up empty boundary groups and collections or non-referenced boundaries.')]
     [Parameter(ParameterSetName = "Create Collections")]
     [switch] $Cleanup,
 
@@ -106,6 +111,9 @@ param
     [Parameter(ParameterSetName='Create Collections', HelpMessage = 'The collection ID of the collection to limit the created collections to.')]
     [string] $LimitingCollectionID = 'SMS00001',
 
+    [Parameter(ParameterSetName='Test', Mandatory=$true, HelpMessage = 'If specified, read the data file only looking forparsing issues, overlaps, or missing data.')]
+    [switch] $TestParse,
+
     [switch] $WhatIf
 )
 
@@ -115,8 +123,8 @@ function Read-SubnetInfo
     param (
         [Parameter(ValueFromPipeline=$true)]
         [object] $data,
-        [hashtable] $Subnets,
-        [hashtable] $SiteSystems,
+        [hashtable] $AllSubnets,
+        [hashtable] $AllSiteSystems,
         [hashtable] $Columns,
         [string] $KeyColumn,
         [hashtable] $CategoryComments
@@ -125,39 +133,61 @@ function Read-SubnetInfo
     process
     {
         $overlap = $false
-        $subnetID = ($data.SubnetID).Trim()
-        $subnetMask = ($data.SubnetMask).Trim()
-        $siteSystemsForItem = ($data.SiteSystems).Trim()
+        $abort = $false
+        
+        try
+        {            
+            $subnetID = ($data.SubnetID).Trim()
+            $subnetMask = ($data.SubnetMask).Trim()
 
-        $subnetInfo = Get-NetworkSummary -IPAddress $subnetID -SubnetMask $subnetMask
+            $subnetInfo = Get-NetworkSummary -IPAddress $subnetID -SubnetMask $subnetMask
 
-        foreach ($col in $additionalColumns)
-        {
-            $value = $data.$col
-
-            if($columnFilters.Contains($col))
+            foreach ($col in $config_AdditionalColumns)
             {
-                $value = Invoke-Command -NoNewScope -ScriptBlock ([Scriptblock]::Create($columnFilters.Item($col)))
-            }
-                
-            $subnetInfo | Add-Member -MemberType NoteProperty -Name $col -Value $value.Trim()
-        }
+                $value = $data.$col
 
-        foreach ($col in $Columns.Keys)
-        {
-            $value = $data.$col
-
-            if($columnFilters.Contains($col))
-            {
-                $value = Invoke-Command -NoNewScope -ScriptBlock ([Scriptblock]::Create($columnFilters.Item($col)))
+                if($config_ColumnFilters.Contains($col))
+                {
+                    $value = Invoke-Command -NoNewScope -ScriptBlock ([Scriptblock]::Create($config_ColumnFilters.Item($col)))
+                }
+                    
+                $subnetInfo | Add-Member -MemberType NoteProperty -Name $col -Value $value.Trim()
             }
 
-            $subnetInfo | Add-Member -MemberType NoteProperty -Name $col -Value $value.Trim()
+            foreach ($col in $Columns.Keys)
+            {
+                $value = $data.$col
+
+                if($config_ColumnFilters.Contains($col))
+                {
+                    $value = Invoke-Command -NoNewScope -ScriptBlock ([Scriptblock]::Create($config_ColumnFilters.Item($col)))
+                }
+
+                $subnetInfo | Add-Member -MemberType NoteProperty -Name $col -Value $value.Trim()
+            }
+        }
+        catch
+        {
+            Write-Warning " ! The was an issue parsing the line: $data"
+            return
         }
 
-        foreach($previousSubnet in $Subnets.Keys)
+        $subnetInfo.PSObject.Properties | ForEach-Object {
+            if($_.Value -eq '' -and -not($config_BlankColumnsOK -contains $_.Name))
+            {
+                Write-Warning " ! One or more values in the following line are blank that are not allowed to be blank: $data"
+                $abort = $true
+            }
+        }
+
+        if($abort)
         {
-            $previousSubnetInfo = $Subnets.Item($previousSubnet)
+            return
+        }
+
+        foreach($previousSubnet in $AllSubnets.Keys)
+        {
+            $previousSubnetInfo = $AllSubnets.Item($previousSubnet)
 
             if(($subnetInfo.NetworkDecimal -ge $previousSubnetInfo.NetworkDecimal -and $subnetInfo.NetworkDecimal -le $previousSubnetInfo.BroadcastDecimal) `
                  -or ($subnetInfo.BroadcastDecimal -ge $previousSubnetInfo.NetworkDecimal -and $subnetInfo.BroadcastDecimal -le $previousSubnetInfo.BroadcastDecimal) `
@@ -169,13 +199,13 @@ function Read-SubnetInfo
             }
         }
 
-        if($Subnets.Contains($subnetInfo.CIDRNotation))
+        if($AllSubnets.Contains($subnetInfo.CIDRNotation))
         {
             Write-Warning " Duplicate subnet found: '$subnetID' at '$($subnetInfo.$KeyColumn)'"
         }
         elseif($overlap -ne $true)
         {
-            $Subnets.Add($subnetInfo.CIDRNotation, $subnetInfo)
+            $AllSubnets.Add($subnetInfo.CIDRNotation, $subnetInfo)
 
             foreach($col in $Columns.Keys)
             {
@@ -188,27 +218,27 @@ function Read-SubnetInfo
                     ($Columns.$col).Add($subnetInfo.$col, $subnetInfo.CIDRNotation)
                 }
 
-                if($commentsByCategory.Contains($col))
+                if($config_CommentsByCategory.Contains($col))
                 {
                     if(($CategoryComments.$col).Contains($subnetInfo.$col))
                     {
-                        ($CategoryComments.$col).($subnetInfo.$col) += "$commentSeperator$($subnetInfo.($commentsByCategory.$col))"
+                        ($CategoryComments.$col).($subnetInfo.$col) += "$config_CommentSeperator$($subnetInfo.($config_CommentsByCategory.$col))"
                     }
                     else
                     {
-                        ($CategoryComments.$col).Add($subnetInfo.$col, $subnetInfo.($commentsByCategory.$col))        
+                        ($CategoryComments.$col).Add($subnetInfo.$col, $subnetInfo.($config_CommentsByCategory.$col))        
                     }
                 }
 
-                if($siteSystemsForItem.Length -gt 0)
+                if(($subnetInfo.siteSystems).Length -gt 0)
                 {
-                    if(($SiteSystems.$col).Contains($subnetInfo.$col))
+                    if(($AllSiteSystems.$col).Contains($subnetInfo.$col))
                     {
-                        ($SiteSystems.$col.($subnetInfo.$col)) += ",$siteSystemsForItem"
+                        ($AllSiteSystems.$col.($subnetInfo.$col)) += ",$($subnetInfo.siteSystems)"
                     }
                     else
                     {
-                        ($SiteSystems.$col).Add($subnetInfo.$col, $siteSystemsForItem)
+                        ($AllSiteSystems.$col).Add($subnetInfo.$col, $subnetInfo.siteSystems)
                     }
                 }
             }
@@ -225,7 +255,7 @@ param (
 )
     process
     {
-        $boundaryName = $Prefix + $ExecutionContext.InvokeCommand.ExpandString($boundaryNameTemplate)
+        $boundaryName = $Prefix + $ExecutionContext.InvokeCommand.ExpandString($config_BoundaryNameTemplate)
 
         $range = $Subnet.Value.HostRange -replace ' ', ''
 
@@ -305,7 +335,7 @@ param (
 
     process
     {
-        $boundaryGroupName = $ExecutionContext.InvokeCommand.ExpandString($boundaryGroupNamePrefix) + $Item.Name
+        $boundaryGroupName = $ExecutionContext.InvokeCommand.ExpandString($config_BoundaryGroupNamePrefix) + $Item.Name
 
         $boundaryGroup = Get-CMBoundaryGroup -Name $boundaryGroupName
         
@@ -379,13 +409,10 @@ param (
             {
                 foreach($siteSystem in $desiredSiteSystems)
                 {
-                    Write-Host " *** $siteSystem"
-
                     if($currentSiteSystems -notcontains $siteSystem)
                     {
                         Write-Host "   + Adding Site System '$siteSystem' to the boundary group"
                         Set-CMBoundaryGroup -Id $boundaryGroup.GroupID -AddSiteSystemServerName $siteSystem
-
                     }
                     else
                     {
@@ -408,6 +435,16 @@ param (
                         Write-Host "   ~ Site System '$siteSystem' exists in boundary group but not the data file"                        
                     }
                 }
+            }
+
+            $boundaryGroupRaw = Get-WMIObject -Namespace "root\sms\site_$siteCode" -Class 'SMS_BoundaryGroup' -Filter "GroupID='$($boundaryGroup.GroupID)'"
+
+            if($boundaryGroupRaw)
+            {
+                $flags = $config_BoundaryGroupFlagsByCategory.$BoundaryGroupCategory
+                Write-Host "   & Setting flags to '$flags' for the boundary group"
+                $boundaryGroupRaw.Flags = [int]$flags
+                [void]$boundaryGroupRaw.Put()
             }
 
             $boundaryGroup
@@ -504,7 +541,7 @@ function New-Collection
 
     process
     {
-        $collectionName = $ExecutionContext.InvokeCommand.ExpandString($collectionNamePrefix) + $Item.Name
+        $collectionName = $ExecutionContext.InvokeCommand.ExpandString($config_CollectionNamePrefix) + $Item.Name
 
         $collection = Get-CMCollection -Name $collectionName
 
@@ -527,7 +564,7 @@ function New-Collection
 
         if($Comments.Length -gt 0)
         {
-            $Comments = (($Comments -split $commentSeperator | Sort-Object -Unique) -join $commentSeperator)
+            $Comments = (($Comments -split $config_CommentSeperator | Sort-Object -Unique) -join $config_CommentSeperator)
             Write-Host "   & Settings comments to '$Comments' ..."
             Set-CMCollection -InputObject $collection -Comment $Comments
         }
@@ -582,10 +619,10 @@ function Add-BoundaryGroupQueryRuleToCollection
     if($currentRules -notcontains $BoundaryGroup.Name)
     {
         Write-Host "   + Adding query rule for '$($BoundaryGroup.Name)'"
-        #boundaryGroupID is referenced in $queryTemplate
+        #boundaryGroupID is referenced in $config_QueryTemplate
         $boundaryGroupID = $BoundaryGroup.GroupID
 
-        $queryRule = $ExecutionContext.InvokeCommand.ExpandString($queryTemplate)
+        $queryRule = $ExecutionContext.InvokeCommand.ExpandString($config_QueryTemplate)
         Add-CMDeviceCollectionQueryMembershipRule `
             -CollectionId $Collection.CollectionID `
             -RuleName $BoundaryGroup.Name `
@@ -636,7 +673,7 @@ function Invoke-CollectionCheck
 		$collection = Get-CMDeviceCollection -Id $collectionItem.InstanceKey
 		if($collection)
 		{
-            $prefixToReplace = $ExecutionContext.InvokeCommand.ExpandString($collectionNamePrefix)
+            $prefixToReplace = $ExecutionContext.InvokeCommand.ExpandString($config_CollectionNamePrefix)
             $collectionName = $collection.Name -replace "$prefixToReplace", ""
 
 			if(-not($ValidBoundaryGroups.Contains($collectionName)))
@@ -680,9 +717,9 @@ function Invoke-FolderCheck
             
             if($Clean)
             {
-                #$ItemType is reference in $CollectionNamePrefix
+                #$ItemType is reference in $config_CollectionNamePrefix
                 $ItemType = $childFolder.Name
-                $collectionNamePrefixToFind = $ExecutionContext.InvokeCommand.ExpandString($collectionNamePrefix)
+                $collectionNamePrefixToFind = $ExecutionContext.InvokeCommand.ExpandString($config_CollectionNamePrefix)
                 
                 foreach($collection in $collectionsInFolder)
                 {
@@ -747,22 +784,24 @@ $boundaries = @{}
 $boundaryGroups = @{}
 
 # Configuration **************************************************************************************
-$boundaryNameTemplate = '$($Subnet.Value.Location) ($($Subnet.Value.SubnetAddresses))'
-$boundaryGroupNamePrefix = '$Prefix$BoundaryGroupCategory '
-$collectionNamePrefix = '${ItemType}: '
-$keyCategory = 'Location'
-$boundaryGroupCategoryNames = 'Location','Type'
-$additionalColumns = 'SubnetAddresses'
-$columnFilters = @{'Type' = '("$value" -split "/")[0]'}
-$queryTemplate = 'select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client, SMS_G_System_BOUNDARYGROUPCACHE.BoundaryGroupIDs from  SMS_R_System inner join SMS_G_System_BOUNDARYGROUPCACHE on SMS_G_System_BOUNDARYGROUPCACHE.ResourceID = SMS_R_System.ResourceId where SMS_G_System_BOUNDARYGROUPCACHE.BoundaryGroupIDs like "%$boundaryGroupID%"'
-$commentsByCategory = @{'Location' = 'Type'}
-$commentSeperator = ', '
+$config_BoundaryNameTemplate = '$($Subnet.Value.Location) ($($Subnet.Value.SubnetAddresses))'
+$config_BoundaryGroupNamePrefix = '$Prefix$BoundaryGroupCategory '
+$config_CollectionNamePrefix = '${ItemType}: '
+$config_KeyCategory = 'Location'
+$config_BoundaryGroupCategoryNames = 'Location','Type'
+$config_AdditionalColumns = 'SiteSystems','SubnetAddresses'
+$config_ColumnFilters = @{'Type' = '("$value" -split "/")[0]'}
+$config_QueryTemplate = 'select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client, SMS_G_System_BOUNDARYGROUPCACHE.BoundaryGroupIDs from  SMS_R_System inner join SMS_G_System_BOUNDARYGROUPCACHE on SMS_G_System_BOUNDARYGROUPCACHE.ResourceID = SMS_R_System.ResourceId where SMS_G_System_BOUNDARYGROUPCACHE.BoundaryGroupIDs like "%$boundaryGroupID%"'
+$config_CommentsByCategory = @{'Location' = 'Type'}
+$config_CommentSeperator = ', '
+$config_BlankColumnsOK = @('SiteSystems')
+$config_BoundaryGroupFlagsByCategory = @{'Location' = 0; 'Type' = 1}
 # End Configuration **********************************************************************************
 
 $boundaryGroupCategories = @{}
 $siteSystems = @{}
 
-foreach($category in $boundaryGroupCategoryNames)
+foreach($category in $config_BoundaryGroupCategoryNames)
 {
     $boundaryGroupCategories.Add($category, @{})
     $siteSystems.Add($category, @{})
@@ -770,18 +809,24 @@ foreach($category in $boundaryGroupCategoryNames)
 
 $collectionComments = @{}
 
-foreach($category in $commentsByCategory.Keys)
+foreach($category in $config_CommentsByCategory.Keys)
 {
     $collectionComments.Add($category, @{})
 }
 
 Write-Host "Loading subnet, location, and type information from data file ..."
 $config = Import-Csv -Path $DataFile
-$config |  Read-SubnetInfo -Subnets $subnets `
+$config |  Read-SubnetInfo -AllSubnets $subnets `
  -Columns $boundaryGroupCategories `
- -KeyColumn $keyCategory `
- -SiteSystems $siteSystems `
+ -KeyColumn $config_KeyCategory `
+ -AllSiteSystems $siteSystems `
  -CategoryComments $collectionComments
+
+if($TestParse)
+{
+    Pop-Location
+    exit 0
+}
 
 Push-Location $siteCode":"
 
