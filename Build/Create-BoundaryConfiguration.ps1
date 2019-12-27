@@ -46,6 +46,9 @@
         Jason Sandys
 
         Version History
+        - 2.3.1 (27 December 2019)
+            - Added configuration so that only certain boundary group types will have 
+            site systems added.
         - 2.3 (23 December 2019)
             - Added TestParse option to test loading the data file so that missing data and overlaps can be detected
             - Added missing data checks during data file load
@@ -230,7 +233,8 @@ function Read-SubnetInfo
                     }
                 }
 
-                if(($subnetInfo.siteSystems).Length -gt 0)
+                if(($subnetInfo.siteSystems).Length -gt 0 -and `
+                    $config_BoundaryGroupCategoriesWithSiteSystems -contains $col)
                 {
                     if(($AllSiteSystems.$col).Contains($subnetInfo.$col))
                     {
@@ -789,6 +793,7 @@ $config_BoundaryGroupNamePrefix = '$Prefix$BoundaryGroupCategory '
 $config_CollectionNamePrefix = '${ItemType}: '
 $config_KeyCategory = 'Location'
 $config_BoundaryGroupCategoryNames = 'Location','Type'
+$config_BoundaryGroupCategoriesWithSiteSystems = 'Location'
 $config_AdditionalColumns = 'SiteSystems','SubnetAddresses'
 $config_ColumnFilters = @{'Type' = '("$value" -split "/")[0]'}
 $config_QueryTemplate = 'select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client, SMS_G_System_BOUNDARYGROUPCACHE.BoundaryGroupIDs from  SMS_R_System inner join SMS_G_System_BOUNDARYGROUPCACHE on SMS_G_System_BOUNDARYGROUPCACHE.ResourceID = SMS_R_System.ResourceId where SMS_G_System_BOUNDARYGROUPCACHE.BoundaryGroupIDs like "%$boundaryGroupID%"'
