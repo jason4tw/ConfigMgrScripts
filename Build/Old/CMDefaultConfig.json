@@ -1,0 +1,416 @@
+{"defaultitems":
+{
+"variables":[
+	{
+		"organizationName":"\"Organization\"",
+		"workstationLimitingCollection":"All Managed Workstations",
+		"updatePrefix":"Updates: ",
+		"workstationPilot":"Workstation Pilot",
+		"workstationProd":"Workstation Production"
+	}
+],
+"schedules":[
+	{
+		"name":"daily",
+		"recurcount":"1",
+		"recurinterval":"days",
+		"start":"06:00"
+	},
+	{
+		"name":"weekly",
+		"start":"07:00",
+		"dayofweek":"Sunday"
+	},
+	{
+		"name":"simpledaily",
+		"recurcount":"1",
+		"recurinterval":"days"
+	},
+	{
+		"name":"patchtuesdayplusoneweek",
+		"scheduletype":"odd",
+		"dayofweek":"Tuesday",
+		"WeekOrder":"3",
+		"start":"2019-01-01 20:00",
+		"recurcount":"3"
+	},
+	{
+		"name":"patchtuesdayplusoneweek",
+		"scheduletype":"even",
+		"dayofweek":"Tuesday",
+		"WeekOrder":"3",
+		"start":"2019-02-01 20:00",
+		"recurcount":"3"
+	}
+],
+"devicecollectionfolders":[
+	{
+		"name":"Software Updates",
+		"prefix":"$updatePrefix",
+		"collections":[
+			{
+				"name":"$workstationProd Exclude",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no"
+			},
+			{
+				"name":"$workstationPilot 1",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationPilot 2",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationPilot 3",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 1",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 2",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 3",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 4",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 5",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 6",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 7",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 8",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 9",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd 10",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"excludeRules":[
+					{
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			},
+			{
+				"name":"$workstationProd No Location",
+				"limitingCollection":"$workstationLimitingCollection",
+				"schedule":"daily",
+				"incremental":"no",
+				"includeRules":[
+					{
+						"a":"All Managed Workstations"						
+					}
+				],
+				"excludeRules":[
+					{
+						"pr1":"$updatePrefix$workstationProd 1",
+						"pr2":"$updatePrefix$workstationProd 2",
+						"pr3":"$updatePrefix$workstationProd 3",
+						"pr4":"$updatePrefix$workstationProd 4",
+						"pr5":"$updatePrefix$workstationProd 5",
+						"pr6":"$updatePrefix$workstationProd 6",
+						"pr7":"$updatePrefix$workstationProd 7",
+						"pr8":"$updatePrefix$workstationProd 8",
+						"pr9":"$updatePrefix$workstationProd 9",
+						"pr10":"$updatePrefix$workstationProd 10",
+						"pi1":"$updatePrefix$workstationPilot 1",
+						"pi2":"$updatePrefix$workstationPilot 2",
+						"pi3":"$updatePrefix$workstationPilot 3",						
+						"a":"$updatePrefix$workstationProd Exclude"
+					}
+				]
+			}
+		]
+	}
+],
+"updatepackages":[
+	{
+		"Name":"All Workstation Updates",
+		"Path":"\\\\server\\SCCMsourcecontent$\\Software Updates\\All Workstation Updates"
+	},
+	{
+		"Name":"All Office Updates",
+		"Path":"\\\\server\\SCCMsourcecontent$\\Software Updates\\All Office Updates"
+	},
+	{
+		"Name":"All Patch MyPC Updates",
+		"Path":"\\\\server\\SCCMsourcecontent$\\Software Updates\\All Office Updates"
+	}
+],
+"templates":[
+	{
+		"name":"Master",
+		"AllowRestart":"false",
+		"AllowSoftwareInstallationOutsideMaintenanceWindow":"false",
+		"DeadlineTime":"2",
+		"DeadlineTimeUnit":"Days",
+		"EnabledAfterCreate":"false",
+		"NoInstallOnRemote":"false",
+		"NoInstallOnUnprotected":"true",
+		"SuppressRestartServer":"true",
+		"SuppressRestartWorkstation":"false",
+		"UseBranchCache":"true",
+		"UseUtc":"false",
+		"UserNotification":"DisplayAll",
+		"VerboseLevel":"AllMessages"
+	}
+],
+"templatesets":[
+	{
+		"name":"MasterSet",
+		"additionaldeployments":[
+			{
+				"CollectionName":"$updatePrefix$workstationPilot 2",
+				"AvailableTime":"2",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationPilot 3",
+				"AvailableTime":"4",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 1",
+				"AvailableTime":"7",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 2",
+				"AvailableTime":"8",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 3",
+				"AvailableTime":"9",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 4",
+				"AvailableTime":"10",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 5",
+				"AvailableTime":"11",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 6",
+				"AvailableTime":"12",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 7",
+				"AvailableTime":"13",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 8",
+				"AvailableTime":"14",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 9",
+				"AvailableTime":"15",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd 10",
+				"AvailableTime":"16",
+				"AvailableTimeUnit":"Days",
+				"Template":"Master"
+			},
+			{
+				"CollectionName":"$updatePrefix$workstationProd Exclude",
+				"AvailableTime":"12",
+				"AvailableTimeUnit":"Months",
+				"DeadlineTime":"12",
+				"DeadlineTimeUnit":"Months",
+				"Template":"Master"
+			}
+		]
+	}
+],
+"automaticdeploymentrules":[
+	{
+		"Name":"All Workstation Updates 2 ($ScheduleType)",
+		"CollectionName":"$updatePrefix$workstationPilot 1",
+		"DeploymentPackageName":"All Workstation Updates",
+		"AddToExistingSoftwareUpdateGroup":"true",
+		"AvailableTime":"2",
+		"AvailableTimeUnit":"Hours",
+		"DeployWithoutLicense":"false",
+		"Description":"All Workstation Updates",
+		"DownloadFromInternet":"true",
+		"Enable":"true",
+		"EnabledAfterCreate":"true",
+		"LanguageSelection":"English",
+		"Product":"'Windows 7','Windows 10','Silverlight','Windows 10, version 1903 and later'",
+		"RunType":"RunTheRuleOnSchedule",
+		"Schedule":"patchtuesdayplusoneweek",
+		"Superseded":"false",
+		"UpdateClassification":"'Critical Updates', 'Security Updates', 'Update Rollups', 'Updates'",
+		"Template":"Master",
+		"TemplateSet":"MasterSet"
+	},
+	{
+		"Name":"All Office Updates 2 ($ScheduleType)",
+		"CollectionName":"$updatePrefix$workstationPilot 1",
+		"DeploymentPackageName":"All Office Updates",
+		"AddToExistingSoftwareUpdateGroup":"true",
+		"AvailableTime":"2",
+		"AvailableTimeUnit":"Hours",
+		"DeployWithoutLicense":"false",
+		"Description":"All Office Updates",
+		"DownloadFromInternet":"true",
+		"Enable":"true",
+		"EnabledAfterCreate":"true",
+		"LanguageSelection":"English",
+		"Product":"'Office 365 Client','Office 2010','Office 2013'",
+		"RunType":"RunTheRuleOnSchedule",
+		"Schedule":"patchtuesdayplusoneweek",
+		"Superseded":"false",
+		"UpdateClassification":"'Critical Updates', 'Security Updates', 'Update Rollups', 'Updates'",
+		"Template":"Master",
+		"TemplateSet":"MasterSet"
+	},
+	{
+		"Name":"All Patch My PC Updates 2 ($ScheduleType)",
+		"CollectionName":"$updatePrefix$workstationPilot 1",
+		"DeploymentPackageName":"All Patch My PC Updates",
+		"AddToExistingSoftwareUpdateGroup":"true",
+		"AvailableTime":"2",
+		"AvailableTimeUnit":"Hours",
+		"DeployWithoutLicense":"false",
+		"Description":"All Patch My PC Updates",
+		"DownloadFromInternet":"true",
+		"Enable":"true",
+		"EnabledAfterCreate":"true",
+		"LanguageSelection":"English",
+		"RunType":"RunTheRuleOnSchedule",
+		"Schedule":"patchtuesdayplusoneweek",
+		"Superseded":"false",
+		"UpdateClassification":"'Critical Updates', 'Security Updates', 'Update Rollups', 'Updates'",
+		"Vendor":"Microsoft",
+		"Template":"Master",
+		"TemplateSet":"MasterSet"
+	}
+]
+}}

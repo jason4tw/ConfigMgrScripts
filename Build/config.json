@@ -1,0 +1,369 @@
+{
+    "configuration":
+    {
+        "variables":
+        {
+            "organizationName":"\"ConfigMgrFTW\"",
+            "workstationLimitingCollection":"OS: All Windows Workstations",
+            "serverLimitingCollection":"OS: All Windows Servers",
+            "updatePrefix":"Updates"
+        },
+        "schedules":[
+            {
+                "name":"daily",
+                "recurcount":"1",
+                "recurinterval":"days",
+                "start":"06:00"
+            },
+            {
+                "name":"weekly",
+                "start":"07:00",
+                "dayofweek":"Sunday"
+            },
+            {
+                "name":"simpledaily",
+                "recurcount":"1",
+                "recurinterval":"days"
+            },
+            {
+                "name":"patchtuesday",
+                "_type":"download",
+                "dayofweek":"Tuesday",
+                "WeekOrder":"2",
+                "start":"2019-01-01 17:00",
+                "recurcount":"1"
+            },
+            {
+                "name":"patchtuesday",
+                "_type":"odd",
+                "dayofweek":"Tuesday",
+                "WeekOrder":"2",
+                "start":"2019-01-01 20:00",
+                "recurcount":"2"
+            },
+            {
+                "name":"patchtuesday",
+                "_type":"even",
+                "dayofweek":"Tuesday",
+                "WeekOrder":"2",
+                "start":"2019-02-01 20:00",
+                "recurcount":"2"
+            },
+            {
+                "name":"ServerTest1",
+                "dayofweek":"Sunday",
+                "WeekOrder":"4",
+                "start":"2019-02-01 08:00",
+                "recurcount":"1",
+                "DurationCount":"3",
+                "DurationInterval":"Hours"
+            }
+        ],
+        "templates":[
+            {
+                "collection": [
+                    {
+                        "name":"WorkstationUpdatesCollectionTemplate",
+                        "settings":[
+                            {
+                                "limitingCollection":"${updatePrefix}: Workstation All",
+                                "schedule":"daily",
+                                "incremental":"no"
+                            }
+                        ]
+                    },
+                    {
+                        "name":"ServerUpdatesCollectionTemplate",
+                        "settings":[
+                            {
+                                "limitingCollection":"${updatePrefix}: Server All",
+                                "schedule":"daily",
+                                "incremental":"no"
+                            }
+                        ]
+                    },
+                    {
+                        "name":"WorkstationOSCollectionTemplate",
+                        "settings":[
+                            {
+                                "limitingCollection":"All Windows Workstations",
+                                "schedule":"daily",
+                                "incremental":"no"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "automaticdeploymentrules": [
+                    {
+                        "name":"WorkstationADRTemplate",
+                        "settings":[
+                            {
+                                "AddToExistingSoftwareUpdateGroup":true,
+                                "DeployWithoutLicense":false,
+                                "DownloadFromInternet":true,
+                                "RunType":"RunTheRuleOnSchedule",
+                                "Schedule":"patchtuesday",
+                                "Superseded":false,
+                                "_deploymentTemplate":"WorkstationUpdateDeploymentTemplate"
+                            }
+                        ]
+                    },
+                    {
+                        "name":"WorkstationADRTemplate",
+                        "_type":"download",
+                        "settings":[
+                            {
+                                "EnabledAfterCreate":false                     
+                            }
+                        ]
+                    },
+                    {
+                        "name":"WorkstationADRTemplate",
+                        "_type":"odd,even",
+                        "settings":[
+                            {
+                                "EnabledAfterCreate":true,
+                                "_additionaldeployments":[
+                                    {
+                                        "Name":"All Workstation Updates ($Filter)",
+                                        "CollectionName":"${updatePrefix}: Workstation Pilot",
+                                        "AvailableTime":"3",
+                                        "AvailableTimeUnit":"Days",
+                                        "DeadlineTime":"4",
+                                        "DeadlineTimeUnit":"Days",
+                                        "_template":"WorkstationUpdateDeploymentTemplate"
+                                    },
+                                    {
+                                        "Name":"All Workstation Updates ($Filter)",
+                                        "CollectionName":"${updatePrefix}: Workstation Production 1",
+                                        "AvailableTime":"10",
+                                        "AvailableTimeUnit":"Days",
+                                        "DeadlineTime":"4",
+                                        "DeadlineTimeUnit":"Days",
+                                        "_template":"WorkstationUpdateDeploymentTemplate"
+                                    },
+                                    {
+                                        "Name":"All Workstation Updates ($Filter)",
+                                        "CollectionName":"${updatePrefix}: Workstation Production 2",
+                                        "AvailableTime":"10",
+                                        "AvailableTimeUnit":"Days",
+                                        "DeadlineTime":"7",
+                                        "DeadlineTimeUnit":"Days",
+                                        "_template":"WorkstationUpdateDeploymentTemplate"
+                                    },
+                                    {
+                                        "Name":"All Workstation Updates ($Filter)",
+                                        "CollectionName":"${updatePrefix}: Workstation Production 3",
+                                        "AvailableTime":"12",
+                                        "AvailableTimeUnit":"Months",
+                                        "DeadlineTime":"12",
+                                        "DeadlineTimeUnit":"Months",
+                                        "_template":"WorkstationUpdateDeploymentTemplate"
+                                    }
+                                ]               
+                            }
+                        ]
+                    }                  
+                ]
+            },
+            {
+                "updatedeployments": [
+                    {
+                        "name":"WorkstationUpdateDeploymentTemplate",
+                        "settings": [
+                            {
+                                "AllowRestart":false,
+                                "AllowSoftwareInstallationOutsideMaintenanceWindow":false,
+                                "EnabledAfterCreate":false,
+                                "NoInstallOnRemote":false,
+                                "NoInstallOnUnprotected":true,
+                                "SuppressRestartServer":true,
+                                "SuppressRestartWorkstation":false,
+                                "UseUtc":false,
+                                "UserNotification":"DisplayAll",
+                                "VerboseLevel":"AllMessages"
+                            }
+                        ]
+                    }
+                ]
+            }
+        ],
+        "deviceCollectionFolders":[
+            {
+                "name":"Operating System",
+                "prefix":"OS: ",
+                "collections":[ 
+                    {
+                        "name":"All Windows Workstations",
+                        "_template":"WorkstationOSCollectionTemplate",
+                        "queryRules":[
+                            {
+                                "name":".",
+                                "query":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.OperatingSystemNameandVersion like 'Microsoft Windows NT Workstation%'"
+                            }
+                        ]
+                    },
+                    {
+                        "name":"All Windows Workstations - Windows 10 1809",
+                        "_template":"WorkstationOSCollectionTemplate",
+                        "queryRules": [
+                            {
+                                "name":".",
+                                "query":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.Build = '10.0.17763'"
+                            }
+                        ]
+                    },
+                    {
+                        "name":"All Windows Workstations - Windows 10 1903",
+                        "_template":"WorkstationOSCollectionTemplate",
+                        "queryRules": [
+                            {
+                                "name":".",
+                                "query":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.Build = '10.0.18362'"
+                            }
+                        ]
+                    },
+                    {
+                        "name":"All Windows Workstations - Windows 10 1909",
+                        "_template":"WorkstationOSCollectionTemplate",
+                        "queryRules": [
+                            {
+                                "name":".",
+                                "query":"select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from SMS_R_System where SMS_R_System.Build = '10.0.18363'"
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                "name":"Software Updates Test",
+                "prefix":"${updatePrefix}: ",
+                "deviceCollectionFolders":[
+                    {
+                        "name":"Workstation",
+                        "prefix":"${updatePrefix}: Workstation ",
+                        "collections":[
+                            {
+                                "name":"Exclude",
+                                "limitingCollection":"$workstationLimitingCollection",
+                                "schedule":"daily",
+                                "incremental":"no"
+                            },
+                            {
+                                "name":"All",
+                                "limitingCollection":"$workstationLimitingCollection",
+                                "schedule":"daily",
+                                "incremental":"no",
+                                "includeRules":[
+                                    "$workstationLimitingCollection"				
+                                ],
+                                "excludeRules":[
+                                    "${updatePrefix}: Workstation Exclude"						
+                                ]
+                            },
+                            {
+                                "name":"Test",
+                                "_template":"WorkstationUpdatesCollectionTemplate"
+                            },
+                            {
+                                "name":"Pilot",
+                                "_template":"WorkstationUpdatesCollectionTemplate"
+                            },
+                            {
+                                "name":"Production 1",
+                                "_template":"WorkstationUpdatesCollectionTemplate"
+                            },
+                            {
+                                "name":"Production 3",
+                                "comment":"Manual Installation Only",
+                                "_template":"WorkstationUpdatesCollectionTemplate"
+                            },
+                            {
+                                "name":"Production 2",
+                                "_template":"WorkstationUpdatesCollectionTemplate",
+                                "includeRules":[
+                                    "$workstationLimitingCollection"				
+                                ],
+                                "excludeRules":[
+                                    "${updatePrefix}: Workstation Pilot",					
+                                    "${updatePrefix}: Workstation Production 1",					
+                                    "${updatePrefix}: Workstation Production 3",				
+                                    "${updatePrefix}: Workstation Test"					
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "name":"Server",
+                        "prefix":"${updatePrefix}: Server ",
+                        "collections": [
+                            {
+                                "name":"Exclude",
+                                "limitingCollection":"$serverLimitingCollection",
+                                "schedule":"daily",
+                                "incremental":"no"
+                            },
+                            {
+                                "name":"All",
+                                "limitingCollection":"$serverLimitingCollection",
+                                "schedule":"daily",
+                                "incremental":"no",
+                                "includeRules":[
+                                    "$serverLimitingCollection"				
+                                ],
+                                "excludeRules":[
+                                    "${updatePrefix}: Server Exclude"						
+                                ]
+                            },
+                            {
+                                "name":"Test",
+                                "_template":"ServerUpdatesCollectionTemplate"
+                            }                                
+                        ]
+                    }
+                ]
+            }
+        ],
+        "updatepackages":[
+            {
+                "Name":"All Workstation Updates",
+                "Path":"\\\\cm301.lab300.configmgrftw.com\\ConfigMgr\\Content\\Updates\\AllWorkstationUpdates"
+            },
+            {
+                "Name":"All Office Updates",
+                "Path":"\\\\cm301.lab300.configmgrftw.com\\ConfigMgr\\Content\\Updates\\AllOfficeUpdates2"
+            },
+            {
+                "Name":"All Server Updates 2",
+                "Path":"\\\\cm301.lab300.configmgrftw.com\\ConfigMgr\\Content\\Updates\\"
+            }
+        ],
+        "automaticdeploymentrules":[
+            {
+                "Name":"All Workstation Updates ($Filter)",
+                "DeploymentPackageName":"All Workstation Updates",
+                "CollectionName":"${updatePrefix}: Workstation Test",
+                "AvailableTime":"2",
+                "AvailableTimeUnit":"Hours",
+                "DeadlineTime":"2",
+                "DeadlineTimeUnit":"Hours",
+                "Description":"All Workstation Updates ($Filter)",
+                "Enable":true,
+                "LanguageSelection":["English"],
+                "Product":["Windows 7","Windows 10","Silverlight","Windows 10, version 1903 and later"],
+                "UpdateClassification":["Critical Updates","Security Updates","Update Rollups","Updates"],
+                "_template":"WorkstationADRTemplate"
+            }
+        ],
+        "maintenancewindows":[
+            {
+                "Name":"Monthly Server Test Patches",
+                "CollectionName":"${updatePrefix}: Server Test",
+                "Schedule":"ServerTest1",
+                "ApplyTo":"SoftwareUpdatesOnly"
+            }
+        ]
+    }
+}
