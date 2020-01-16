@@ -42,10 +42,13 @@
         Creates boundaries and boundary groups defined in the data2.csv data file.
 		
 	.NOTES
-		Version 2.3
+		Version 2.3.2
         Jason Sandys
 
         Version History
+        - 2.3.2 (16 January 2020)
+            - Added check for existing duplicate IP boundary range to handle location name changes.
+              If a duplicate is found (based on the range, not name), the existing boundary is renamed.
         - 2.3.1 (27 December 2019)
             - Added configuration so that only certain boundary group types will have 
             site systems added.
@@ -267,16 +270,28 @@ param (
 
         if(-not($boundary))
         {
-            Write-Host " + Creating boundary: $boundaryName ($($Subnet.Value.CIDRNotation) = $range)"
-            
             try
             {
                 $boundary = New-CMBoundary -Name $boundaryName -Type IPRange -Value $range -WhatIf:$WhatIf
+                Write-Host " + Creating boundary: $boundaryName ($($Subnet.Value.CIDRNotation) = $range)"
             }
             catch
             {
-                Write-Warning " Could not create boundary."
-                return
+                $boundary = Get-CMBoundary | Where-Object { $_.Value -eq $range }
+
+                if($boundary)
+                {
+                    $existingBoundaryName = $boundary.DisplayName
+
+                    Write-Host " & Changing name on existing boundary '$existingBoundaryName' to '$boundaryName' ."
+
+                    $boundary | Set-CMBoundary -NewName $boundaryName
+                }
+                else
+                {
+                    Write-Warning " Could not create boundary."
+                    return
+                }
             }
         }
         else
