@@ -16,6 +16,7 @@
         Jason Sandys
 
         Version History
+        - 1.21 (23 January): Modifed to use older WIM cmdlets for PowerShell 2.0 compatibility
         - 1.2 (21 January 2020): 
             - Updated to store hard blocks in WMI instead of just returning the information to stdout
             - Added logging
@@ -154,7 +155,7 @@ function Add-LogItem
     $msg = "<![LOG[$Message]LOG]!><time=`"$(Get-Date -Format 'HH:mm:ss').000+0`" date=`"$(Get-Date -Format 'MM-dd-yyyy')`" "
     $msg += "component=`"$Component`" context=`"`" type=`"$msgType`" thread=`"$pid`" file=`"$Filename`">"
 
-    Add-Content -Path $LogPathandFilename -Value $msg
+    Add-Content -Path $LogPathandFilename -Value $msg -ErrorAction SilentlyContinue
 }
 function Get-NativeRegStringValue
 {
@@ -220,7 +221,8 @@ function Get-WMINamespace
     $parentNamespace = Split-Path -Path $NamespaceName -Parent
     $leafNamespace = Split-Path -Path $NamespaceName -Leaf
 
-    $namespace = Get-CimInstance -Namespace $parentNamespace -ClassName __namespace | Where-Object -FilterScript { $_.Name -eq $leafNamespace }
+    #$namespace = Get-CimInstance -Namespace $parentNamespace -ClassName __namespace | Where-Object -FilterScript { $_.Name -eq $leafNamespace }
+    $namespace = Get-WmiObject -Namespace $parentNamespace -Class __namespace | Where-Object -FilterScript { $_.Name -eq $leafNamespace }
 
     if(-not($namespace))
     {
@@ -230,7 +232,11 @@ function Get-WMINamespace
         {
             try
             {
-                $namespace = New-CimInstance -Namespace $parentNamespace -ClassName __namespace -Property @{ Name = $leafNamespace }
+                #$namespace = New-CimInstance -Namespace $parentNamespace -ClassName __namespace -Property @{ Name = $leafNamespace }
+                $rootNamespace = [wmiclass]"${parentNamespace}:__namespace"
+                $namespace = $rootNamespace.CreateInstance()
+                $namespace.Name = $leafNamespace
+                [void] $namespace.Put()
                 Add-LogMsg -Message "Successfully created the '$NamespaceName' namespace..."
             }
             catch
@@ -271,7 +277,8 @@ function Get-WMIClass
 
     if(Get-WMINamespace -NamespaceName $NamespaceName -Create)
     {
-        $class = Get-CimClass -Namespace "$NamespaceName" | Where-Object -FilterScript { $_.CimClassName -eq $ClassName }
+        #$class = Get-CimClass -Namespace $NamespaceName | Where-Object -FilterScript { $_.CimClassName -eq $ClassName }
+        $class = Get-WMIObject -Namespace $NamespaceName -list | Where-Object -FilterScript { $_.Name -eq $ClassName }
 
         if(-not($class))
         {
@@ -314,7 +321,8 @@ function Get-WMIClass
             {
                 try
                 {
-                    Get-CimInstance -Namespace $NamespaceName -ClassName $ClassName | Remove-CimInstance
+                    #Get-CimInstance -Namespace $NamespaceName -ClassName $ClassName | Remove-CimInstance
+                    Get-WMIObject -Namespace $NamespaceName -Class $ClassName | Remove-WMIObject
                     Add-LogMsg -Message "Removed all existing instances in the '$ClassName' class."
                 }
                 catch
@@ -345,22 +353,30 @@ function Add-WMIObject
 
     process
     {
-        $instanceData = @{}
+        # $instanceData = @{}
 
-        foreach($property in $PropertyMap.Keys)
-        {
-            $instanceData.Add($property, $_.($PropertyMap.$property))
-        }
+        # foreach($property in $PropertyMap.Keys)
+        # {
+        #     $instanceData.Add($property, $_.($PropertyMap.$property))
+        # }
 
-        try
-        {
-            New-CimInstance -Namespace $FullNamespaceName -ClassName $ClassName -Property $instanceData | Out-Null
-            Add-LogMsg -Message "Created new '$ClassName' object for $(Convert-HashToString -Hash $instanceData)"
-        }
-        catch
-        {
-            Add-LogMsg -Message "Failed to create new '$ClassName' object: $_" -MessageType 'Error'
-        }
+        # try
+        # {
+            #New-CimInstance -Namespace $FullNamespaceName -ClassName $ClassName -Property $instanceData | Out-Null
+            $class = [wmiclass]"${FullNamespaceName}:$ClassName"
+            $object = $class.CreateInstance()
+            foreach($property in $PropertyMap.Keys)
+            {
+                $object.$property = $_.($PropertyMap.$property)
+            }
+            [void] $object.Put()
+            #Add-LogMsg -Message "Created new '$ClassName' object for $(Convert-HashToString -Hash $instanceData)"
+            Add-LogMsg -Message "Created new '$ClassName' object for $(Convert-HashToString -Hash $PropertyMap)"
+        # }
+        # catch
+        # {
+        #     Add-LogMsg -Message "Failed to create new '$ClassName' object: $_" -MessageType 'Error'
+        # }
     }
 }
 
