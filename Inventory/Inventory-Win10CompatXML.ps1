@@ -12,11 +12,12 @@
         .\Parse-Win10CompatXML.ps1 
 		
 	.NOTES
-		Version 1.2
+		Version 1.22
         Jason Sandys
 
         Version History
-        - 1.21 (23 January): Modifed to use older WIM cmdlets for PowerShell 2.0 compatibility
+        - 1.22 (23 January 2020): Modified PSCommandPath shim to use $MyInvocation.ScriptName
+        - 1.21 (23 January 2020): Modifed to use older WIM cmdlets for PowerShell 2.0 compatibility
         - 1.2 (21 January 2020): 
             - Updated to store hard blocks in WMI instead of just returning the information to stdout
             - Added logging
@@ -380,7 +381,7 @@ function Add-WMIObject
     }
 }
 
-if ($PSCommandPath -eq $null) { function GetPSCommandPath() { return $MyInvocation.PSCommandPath; } $PSCommandPath = GetPSCommandPath; }
+if ($PSCommandPath -eq $null) { function GetPSCommandPath() { return $MyInvocation.ScriptName; } $PSCommandPath = GetPSCommandPath; }
 
 $deviceCompatProperties = @{ 'DeviceClass' = [System.Management.CimType]::String
                              'DeviceInstanceId' = [System.Management.CimType]::String
