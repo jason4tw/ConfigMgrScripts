@@ -44,10 +44,12 @@
         the membership of collections defined in the json configuration file.
 		
 	.NOTES
-		Version 2.0
+		Version 2.02
         Jason Sandys
 
-		Version History
+        Version History
+        - 2.02 (24 January 2020): Added existing maintenance window check
+        - 2.01 (24 January 2020): Created ADR Deployment creation bug
         - 2.0 (12 January 2020): Heavily modified from verison 1.
             - Better template implmentation and json representation
             - Added maintenance windows
@@ -79,6 +81,32 @@ param
     [switch] $WhatIf
 
 )
+
+function Convert-HashToString
+{
+    param
+    (
+        [Parameter(Mandatory = $true)]
+        [System.Collections.Hashtable]
+        $Hash
+    )
+    $hashstr = "@{"
+    $keys = $Hash.keys
+    foreach ($key in $keys)
+    {
+        $v = $Hash[$key]
+        if ($key -match "\s")
+        {
+            $hashstr += "`"$key`"" + "=" + "`"$v`"" + ";"
+        }
+        else
+        {
+            $hashstr += $key + "=" + "`"$v`"" + ";"
+        }
+    }
+    $hashstr += "}"
+    return $hashstr
+}
 
 function Invoke-ProcessParameters
 {
@@ -557,6 +585,8 @@ function New-CMFTWADRDeployment
 
         $parameters = Invoke-ProcessParameters -Item $ADRDeploymentInfo -Filter $Filter
 
+        $parameters.Name = $ADRName
+
         if($parameters.Keys.Count -gt 0)
         {
             if (Get-CMDeviceCollection -Name $adrDeploymentCollection)
@@ -671,23 +701,38 @@ function New-CMFTWMaintenanceWindow
     {
         $mwDeploymentCollection = $ExecutionContext.InvokeCommand.ExpandString($MWInfo.CollectionName)
 
-        Add-TemplateParameters -Item $MWInfo -Templates $_build.templates.maintenancewindows -Filter $TypeFilter
+        $collection = Get-CMDeviceCollection -Name $mwDeploymentCollection
 
-        $parameters = Invoke-ProcessParameters -Item $MWInfo -Filter $Filter
-
-        if ($parameters.Keys.Count -gt 0)
+        if($collection)
         {
-            if (Get-CMDeviceCollection -Name $mwDeploymentCollection)
+
+            $maintWindowName = $MWInfo.Name
+            $currentMaintWindow = Get-CMMaintenanceWindow -CollectionName $mwDeploymentCollection -MaintenanceWindowName $maintWindowName
+
+            if ($currentMaintWindow)
             {
-                Write-Host "    + Maintenance Window for '$mwDeploymentCollection'"
-                New-CMMaintenanceWindow @parameters | out-null
+                Write-Output "  = Skipping Existing Maintenance Window '$maintWindowName' for the collection '$mwDeploymentCollection'"
             }
             else
             {
-                Write-Warning "Could not find target collection '$($parameters.CollectionName)' trying to create Maintenance Window."
+                Add-TemplateParameters -Item $MWInfo -Templates $_build.templates.maintenancewindows -Filter $TypeFilter
+
+                $parameters = Invoke-ProcessParameters -Item $MWInfo -Filter $Filter
+
+                if ($parameters.Keys.Count -gt 0)
+                {
+                    if (Get-CMDeviceCollection -Name $mwDeploymentCollection)
+                    {
+                        Write-Host "    + Maintenance Window for '$mwDeploymentCollection'"
+                        New-CMMaintenanceWindow @parameters | out-null
+                    }
+                }
             }
         }
-
+        else
+        {
+            Write-Warning "Could not find target collection '$($parameters.CollectionName)' trying to create Maintenance Window."
+        }
     }
     
     end
