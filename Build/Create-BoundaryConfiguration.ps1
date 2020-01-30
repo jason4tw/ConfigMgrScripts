@@ -42,10 +42,16 @@
         Creates boundaries and boundary groups defined in the data2.csv data file.
 		
 	.NOTES
-		Version 2.3.2
+		Version 2.4
         Jason Sandys
 
         Version History
+        - 2.4 (29 January 2020)
+            - Updated to read IP gateway from the configuration CSV
+            - Updated to separately and selectively create boundary groups and collections
+            - Updated to use IP gateways for collection query rules
+            - Updated to set collection comments based on an expression and not a single variable
+            - Updated collection comments expressions to include IP gateways as part of the comments
         - 2.3.2 (16 January 2020)
             - Added check for existing duplicate IP boundary range to handle location name changes.
               If a duplicate is found (based on the range, not name), the existing boundary is renamed.
@@ -226,13 +232,18 @@ function Read-SubnetInfo
 
                 if($config_CommentsByCategory.Contains($col))
                 {
+                    $commentExpression = $config_CommentsByCategory.$col -replace '\$(\w+)', '$($subnetInfo.$1)'
+                    $comments = $ExecutionContext.InvokeCommand.ExpandString($commentExpression)
+
                     if(($CategoryComments.$col).Contains($subnetInfo.$col))
                     {
-                        ($CategoryComments.$col).($subnetInfo.$col) += "$config_CommentSeperator$($subnetInfo.($config_CommentsByCategory.$col))"
+                        #($CategoryComments.$col).($subnetInfo.$col) += "$config_CommentSeperator$($subnetInfo.($config_CommentsByCategory.$col))"
+                        ($CategoryComments.$col).($subnetInfo.$col) += "$config_CommentSeperator$comments"
                     }
                     else
                     {
-                        ($CategoryComments.$col).Add($subnetInfo.$col, $subnetInfo.($config_CommentsByCategory.$col))        
+                        #($CategoryComments.$col).Add($subnetInfo.$col, $subnetInfo.($config_CommentsByCategory.$col))        
+                        ($CategoryComments.$col).Add($subnetInfo.$col, $comments)        
                     }
                 }
 
@@ -638,10 +649,10 @@ function Add-BoundaryGroupQueryRuleToCollection
     if($currentRules -notcontains $BoundaryGroup.Name)
     {
         Write-Host "   + Adding query rule for '$($BoundaryGroup.Name)'"
-        #boundaryGroupID is referenced in $config_QueryTemplate
+        #boundaryGroupID is referenced in $config_BoundaryGroupQueryTemplate
         $boundaryGroupID = $BoundaryGroup.GroupID
 
-        $queryRule = $ExecutionContext.InvokeCommand.ExpandString($config_QueryTemplate)
+        $queryRule = $ExecutionContext.InvokeCommand.ExpandString($config_BoundaryGroupQueryTemplate)
         Add-CMDeviceCollectionQueryMembershipRule `
             -CollectionId $Collection.CollectionID `
             -RuleName $BoundaryGroup.Name `
@@ -671,6 +682,64 @@ function Add-BoundaryGroupQueryRuleToCollection
         }
     }
 }
+function Add-IPGatewayQueryRulesToCollection
+{
+	[CmdletBinding()]
+	param
+	(
+        [Parameter(ValueFromPipeline=$true)]
+        [object] $Collection,
+        [object] $AllSubnets,
+        [System.Collections.DictionaryEntry] $Item  
+	)
+
+    $currentRules = (Get-CMDeviceCollectionQueryMembershipRule -CollectionId $Collection.CollectionID).RuleName
+
+    $categorySubnets = $Item.Value -split ','
+    $gateways = New-Object -TypeName "System.Collections.ArrayList"
+
+    foreach ($subnet in $categorySubnets)
+    {
+        $gatewayIP = ($AllSubnets.$subnet).Gateway
+        $gateways.Add($gatewayIP) | Out-Null
+
+        if ($currentRules -notcontains $gatewayIP)
+        {
+            Write-Host "   + Adding query rule for gateway with an IP of '$gatewayIP'"
+
+            # $gatewayIP is referenced in $config_GatewayQueryTemplate
+            $queryRule = $ExecutionContext.InvokeCommand.ExpandString($config_GatewayQueryTemplate)
+
+                Add-CMDeviceCollectionQueryMembershipRule `
+                    -CollectionId $Collection.CollectionID `
+                    -RuleName $gatewayIP `
+                    -QueryExpression $queryRule
+        }
+        else
+        {
+            Write-Host "   = Query rule for gateway with an IP of '$gatewayIP' already exists" 
+        }
+    }
+
+    foreach ($rule in $currentRules)
+    {
+        if ($gateways -notcontains $rule)
+        {
+            if($Restore)
+            {
+                Write-Host "   x Removing query rule named '$rule' as it exists but is not in the data file"             
+                Remove-CMDeviceCollectionQueryMembershipRule `
+                 -CollectionId $Collection.CollectionID `
+                 -RuleName $rule `
+                 -Force
+            }
+            else
+            {
+                Write-Host "   ~ Query rule named '$rule' exists but not in the data file"             
+            }
+        }
+    }
+}
 
 function Invoke-CollectionCheck
 {
@@ -678,7 +747,7 @@ function Invoke-CollectionCheck
 	param
 	(
 		[object] $ConsoleFolder,
-        [hashtable] $ValidBoundaryGroups,
+        [hashtable] $ValidCollections,
         [string] $ItemType,
         [switch] $Clean
 	)
@@ -695,16 +764,16 @@ function Invoke-CollectionCheck
             $prefixToReplace = $ExecutionContext.InvokeCommand.ExpandString($config_CollectionNamePrefix)
             $collectionName = $collection.Name -replace "$prefixToReplace", ""
 
-			if(-not($ValidBoundaryGroups.Contains($collectionName)))
+            if (-not($ValidCollections.Contains($collectionName)))
             {
                 if($Clean)
                 {
-                    Write-Host " x Deleting collection: $($collection.Name) ..."
+                    Write-Host " x Deleting collection: '$($collection.Name)' ..."
                     Remove-CMDeviceCollection -Id $collection.CollectionID -Force -WhatIf:$WhatIf
                 }
                 else
                 {
-                    Write-Host " * Collection $($collection.Name) does not exist in the data file"
+                    Write-Host " * Collection '$($collection.Name)' does not exist in the data file"
                 }
 			}
 		}
@@ -767,12 +836,12 @@ function Invoke-FolderCheck
                 }
                 else
                 {
-                    Write-Host " * Folder $($childFolder.Name) does not exist in the data file but contains $collectionsInFolderCount other collections"                    
+                    Write-Host " * Folder '$($childFolder.Name)' does not exist in the data file but contains $collectionsInFolderCount other collections"                    
                 }
             }
             else
             {
-                Write-Host " * Folder $($childFolder.Name) does not exist in the data file and contains $collectionsInFolderCount collections"
+                Write-Host " * Folder '$($childFolder.Name)' does not exist in the data file and contains $collectionsInFolderCount collections"
             }
         }
     }
@@ -807,23 +876,29 @@ $config_BoundaryNameTemplate = '$($Subnet.Value.Location) ($($Subnet.Value.Subne
 $config_BoundaryGroupNamePrefix = '$Prefix$BoundaryGroupCategory '
 $config_CollectionNamePrefix = '${ItemType}: '
 $config_KeyCategory = 'Location'
-$config_BoundaryGroupCategoryNames = 'Location','Type'
+$config_BoundaryGroupCategoryNames = @('Location')
 $config_BoundaryGroupCategoriesWithSiteSystems = 'Location'
-$config_AdditionalColumns = 'SiteSystems','SubnetAddresses'
+$config_CollectionCategoryNames = @('Location','Type')
+$config_AdditionalColumns = 'SiteSystems','SubnetAddresses','Gateway'
 $config_ColumnFilters = @{'Type' = '("$value" -split "/")[0]'}
-$config_QueryTemplate = 'select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client, SMS_G_System_BOUNDARYGROUPCACHE.BoundaryGroupIDs from  SMS_R_System inner join SMS_G_System_BOUNDARYGROUPCACHE on SMS_G_System_BOUNDARYGROUPCACHE.ResourceID = SMS_R_System.ResourceId where SMS_G_System_BOUNDARYGROUPCACHE.BoundaryGroupIDs like "%$boundaryGroupID%"'
-$config_CommentsByCategory = @{'Location' = 'Type'}
+$config_BoundaryGroupQueryTemplate = 'select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client, SMS_G_System_BOUNDARYGROUPCACHE.BoundaryGroupIDs from  SMS_R_System inner join SMS_G_System_BOUNDARYGROUPCACHE on SMS_G_System_BOUNDARYGROUPCACHE.ResourceID = SMS_R_System.ResourceId where SMS_G_System_BOUNDARYGROUPCACHE.BoundaryGroupIDs like "%$boundaryGroupID%"'
+$config_GatewayQueryTemplate = 'select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from  SMS_R_System inner join SMS_G_System_NETWORK_ADAPTER_CONFIGURATION on SMS_G_System_NETWORK_ADAPTER_CONFIGURATION.ResourceId = SMS_R_System.ResourceId where SMS_G_System_NETWORK_ADAPTER_CONFIGURATION.DefaultIPGateway like "%$gatewayIP%"'
+$config_CommentsByCategory = @{'Location' = '$Type ($Gateway)';'Type' = '$Gateway'}
 $config_CommentSeperator = ', '
 $config_BlankColumnsOK = @('SiteSystems')
 $config_BoundaryGroupFlagsByCategory = @{'Location' = 0; 'Type' = 1}
 # End Configuration **********************************************************************************
 
-$boundaryGroupCategories = @{}
+$allCategories = @{}
 $siteSystems = @{}
+
+foreach ($category in (($config_BoundaryGroupCategoryNames + $config_CollectionCategoryNames) | Select-Object -Unique))
+{
+    $allCategories.Add($category, @{})
+}
 
 foreach($category in $config_BoundaryGroupCategoryNames)
 {
-    $boundaryGroupCategories.Add($category, @{})
     $siteSystems.Add($category, @{})
 }
 
@@ -837,7 +912,7 @@ foreach($category in $config_CommentsByCategory.Keys)
 Write-Host "Loading subnet, location, and type information from data file ..."
 $config = Import-Csv -Path $DataFile
 $config |  Read-SubnetInfo -AllSubnets $subnets `
- -Columns $boundaryGroupCategories `
+ -Columns $allCategories `
  -KeyColumn $config_KeyCategory `
  -AllSiteSystems $siteSystems `
  -CategoryComments $collectionComments
@@ -855,11 +930,11 @@ Write-Host "Processing boundaries from subnets ..."
 $subnets.GetEnumerator() | ForEach-Object { $subnetItem = $_; New-Boundary -Subnet $subnetItem  } `
  | ForEach-Object { $boundaries.Add($subnetItem.Value.CIDRNotation, $_) }
 
-foreach($category in $boundaryGroupCategories.Keys)
+foreach($category in $config_boundaryGroupCategoryNames)
 {
     Write-Host ""
     Write-Host "Processing boundary groups based on $category ..."
-    ($boundaryGroupCategories.$category).GetEnumerator() `
+    ($allCategories.$category).GetEnumerator() `
      | New-BoundaryGroup -BoundaryGroupCategory $category -Boundaries $boundaries -SiteSystems $siteSystems.$category `
      | ForEach-Object { $boundaryGroups.Add($_.Name, $_) }
 }
@@ -887,28 +962,30 @@ if($Collections)
     
     if($targetFolder)
     {
-        $boundaryGroupCategories.Keys `
+        $config_CollectionCategoryNames `
          | ForEach-Object { $category = $_; New-ConsoleFolder -ParentPath $targetFolderPath -FolderName $category } `
          | ForEach-Object { $categoryCollectionFolders.Add($category, $_) }
 
-        foreach($boundaryGroupCategory in $boundaryGroupCategories.Keys)
+        foreach($collectionCategory in $config_CollectionCategoryNames)
         {
             Write-Host ""
-            Write-Host "Processing collections based on $boundaryGroupCategory ..."
+            Write-Host "Processing collections based on $collectionCategory ..."
 
-            ($boundaryGroupCategories.$boundaryGroupCategory).GetEnumerator() `
-             | ForEach-Object { $boundaryGroupName = "$Prefix$boundaryGroupCategory $($_.Name)"; `
-             New-Collection -Item $_ -ItemType $boundaryGroupCategory -Comments $collectionComments.$boundaryGroupCategory.($_.Name) `
-             | Move-Collection -ConsoleFolder $categoryCollectionFolders.$boundaryGroupCategory `
-             | Add-BoundaryGroupQueryRuleToCollection -BoundaryGroup $boundaryGroups.Item($boundaryGroupName) }
+            ($allCategories.$collectionCategory).GetEnumerator() `
+             | ForEach-Object { $categoryItem = $_; New-Collection -Item $categoryItem -ItemType $collectionCategory `
+             -Comments $collectionComments.$collectionCategory.($_.Name) `
+             | Move-Collection -ConsoleFolder $categoryCollectionFolders.$collectionCategory `
+              | Add-IPGatewayQueryRulesToCollection -AllSubnets $subnets -Item $categoryItem
+             #| Add-BoundaryGroupQueryRuleToCollection -BoundaryGroup $boundaryGroups.Item($boundaryGroupName)
+             }
         }
     }
 
     Write-Host ""
     Write-Host "Checking for stale collections ..."
-    foreach($category in $boundaryGroupCategories.Keys)
+    foreach($category in $config_CollectionCategoryNames)
     {
-        Invoke-CollectionCheck -ConsoleFolder $categoryCollectionFolders.$category -ItemType $category -ValidBoundaryGroups $boundaryGroupCategories.$category -Clean:$Cleanup
+        Invoke-CollectionCheck -ConsoleFolder $categoryCollectionFolders.$category -ItemType $category -ValidCollections $allCategories.$category -Clean:$Cleanup
     }
 
     Write-Host ""
