@@ -12,10 +12,11 @@
         .\Parse-Win10CompatXML.ps1 
 		
 	.NOTES
-		Version 1.22
+		Version 1.23
         Jason Sandys
 
         Version History
+        - 1.23 (23 January 2020): Modified registry retrieval method; cannot use script from ConfigMgr package because of this
         - 1.22 (23 January 2020): Modified PSCommandPath shim to use $MyInvocation.ScriptName
         - 1.21 (23 January 2020): Modifed to use older WIM cmdlets for PowerShell 2.0 compatibility
         - 1.2 (21 January 2020): 
@@ -35,7 +36,7 @@ param
 	[ValidateScript({ Test-Path -PathType Container -Path $_ })]
     [string] $Folder = 'C:\$WINDOWS.~BT\Sources\Panther\',
     [Parameter(Mandatory=$false)]
-        [string] $Namespace = 'ITLocal',
+        [string] $Namespace = 'IGT',
     [Parameter(Mandatory=$false)]
         [string] $ClassPrefix = 'Win10_'
 )
@@ -103,7 +104,8 @@ function Add-LogMsg
     }
     else
     {
-        $logFolder = Get-NativeRegStringValue -Hive 'HKLM' -Key 'SOFTWARE\Microsoft\SMS\Client\Configuration\Client Properties' -ValueName 'Local SMS Path'
+        #$logFolder = Get-NativeRegStringValue -Hive 'HKLM' -Key 'SOFTWARE\Microsoft\SMS\Client\Configuration\Client Properties' -ValueName 'Local SMS Path'
+        $logFolder = (Get-ItemProperty -Path 'HKLM:SOFTWARE\Microsoft\SMS\Client\Configuration\Client Properties' -Name 'Local SMS Path').'Local SMS Path'
 
         if($logFolder)
         {
@@ -354,15 +356,15 @@ function Add-WMIObject
 
     process
     {
-        # $instanceData = @{}
+        $instanceData = @{}
 
-        # foreach($property in $PropertyMap.Keys)
-        # {
-        #     $instanceData.Add($property, $_.($PropertyMap.$property))
-        # }
+        foreach($property in $PropertyMap.Keys)
+        {
+            $instanceData.Add($property, $_.($PropertyMap.$property))
+        }
 
-        # try
-        # {
+        try
+        {
             #New-CimInstance -Namespace $FullNamespaceName -ClassName $ClassName -Property $instanceData | Out-Null
             $class = [wmiclass]"${FullNamespaceName}:$ClassName"
             $object = $class.CreateInstance()
@@ -371,16 +373,16 @@ function Add-WMIObject
                 $object.$property = $_.($PropertyMap.$property)
             }
             [void] $object.Put()
-            #Add-LogMsg -Message "Created new '$ClassName' object for $(Convert-HashToString -Hash $instanceData)"
-            Add-LogMsg -Message "Created new '$ClassName' object for $(Convert-HashToString -Hash $PropertyMap)"
-        # }
-        # catch
-        # {
-        #     Add-LogMsg -Message "Failed to create new '$ClassName' object: $_" -MessageType 'Error'
-        # }
+            Add-LogMsg -Message "Created new '$ClassName' object for $(Convert-HashToString -Hash $instanceData)"
+        }
+        catch
+        {
+            Add-LogMsg -Message "Failed to create new '$ClassName' object: $_" -MessageType 'Error'
+        }
     }
 }
 
+$script:logfilename = 'Inventory-Win10CompatXML.log'
 if ($PSCommandPath -eq $null) { function GetPSCommandPath() { return $MyInvocation.ScriptName; } $PSCommandPath = GetPSCommandPath; }
 
 $deviceCompatProperties = @{ 'DeviceClass' = [System.Management.CimType]::String
@@ -412,6 +414,8 @@ else
     $fullNamespaceName = Join-Path -Path 'root' -ChildPath $Namespace
 }
 
+$compatCount = 0
+
 if((Get-WMIClass -NamespaceName $fullNamespaceName -ClassName $deviceCompatClassName `
     -ClassProperties $deviceCompatProperties -KeyProperties $deviceCompatKeyProperties `
     -Create -RemoveExistingInstances) -and `
@@ -431,7 +435,11 @@ if((Get-WMIClass -NamespaceName $fullNamespaceName -ClassName $deviceCompatClass
          Where-object -filterscript { $_.Compatibilityinfo.BlockingType -eq 'hard'} | `
          Add-WMIObject -FullNamespaceName $fullNamespaceName -ClassName $programCompatClassName `
           -PropertyMap $programCompatPropertyMap
+
+        $compatCount += $compatXML.CompatReport.Devices.Device.Count + $compatxml.CompatReport.Programs.Program.Count
     }
 }
 
 Add-LogMsg -Message 'Finished'
+
+$compatCount
