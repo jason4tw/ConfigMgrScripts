@@ -25,6 +25,7 @@
     .PARAMETER Restore
         Restores collections and boundary groups to their data file defined state by
         removing all collection query rules, boundary group members, and site systems not defined in the data file.
+        Also restore the collection's update schedule to the default (daily at noon).
 
     .PARAMETER Collections
         If specified, also creates corresponding location and type collections.
@@ -46,6 +47,10 @@
         Jason Sandys
 
         Version History
+        - 2.41 (1 February 2020) 
+            - Updated to change the collection update schedule back to the schedule defined here in the script
+              if the -Restore option is specified.
+            - Update to only set comments on new collections or is the -Restore option is specified.
         - 2.4 (29 January 2020)
             - Updated to read IP gateway from the configuration CSV
             - Updated to separately and selectively create boundary groups and collections
@@ -574,6 +579,7 @@ function New-Collection
         $collectionName = $ExecutionContext.InvokeCommand.ExpandString($config_CollectionNamePrefix) + $Item.Name
 
         $collection = Get-CMCollection -Name $collectionName
+        $setComments = $false
 
         if(-not($collection))
         {
@@ -585,14 +591,24 @@ function New-Collection
                     -LimitingCollectionId $LimitingCollectionID `
                     -RefreshType Periodic `
                     -RefreshSchedule $updateSchedule
+
+                    $setComments = $true
             }
         }
         else
         {
             Write-Host " = Collection already exists: $collectionName ..."
+
+            if($Restore)
+            {
+                Write-Host "   & Restoring membership update schedule ..."
+                Set-CMCollection -InputObject $collection -RefreshSchedule $updateSchedule
+                
+                $setComments = $true
+            }
         }
 
-        if($Comments.Length -gt 0)
+        if($setComments -and $Comments.Length -gt 0)
         {
             $Comments = (($Comments -split $config_CommentSeperator | Sort-Object -Unique) -join $config_CommentSeperator)
             Write-Host "   & Settings comments to '$Comments' ..."
@@ -883,7 +899,7 @@ $config_AdditionalColumns = 'SiteSystems','SubnetAddresses','Gateway'
 $config_ColumnFilters = @{'Type' = '("$value" -split "/")[0]'}
 $config_BoundaryGroupQueryTemplate = 'select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client, SMS_G_System_BOUNDARYGROUPCACHE.BoundaryGroupIDs from  SMS_R_System inner join SMS_G_System_BOUNDARYGROUPCACHE on SMS_G_System_BOUNDARYGROUPCACHE.ResourceID = SMS_R_System.ResourceId where SMS_G_System_BOUNDARYGROUPCACHE.BoundaryGroupIDs like "%$boundaryGroupID%"'
 $config_GatewayQueryTemplate = 'select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from  SMS_R_System inner join SMS_G_System_NETWORK_ADAPTER_CONFIGURATION on SMS_G_System_NETWORK_ADAPTER_CONFIGURATION.ResourceId = SMS_R_System.ResourceId where SMS_G_System_NETWORK_ADAPTER_CONFIGURATION.DefaultIPGateway like "%$gatewayIP%"'
-$config_CommentsByCategory = @{'Location' = '$Type ($Gateway)';'Type' = '$Gateway'}
+$config_CommentsByCategory = @{'Location' = '$Type ($Gateway)'}
 $config_CommentSeperator = ', '
 $config_BlankColumnsOK = @('SiteSystems')
 $config_BoundaryGroupFlagsByCategory = @{'Location' = 0; 'Type' = 1}
