@@ -27,8 +27,11 @@
         removing all collection query rules, boundary group members, and site systems not defined in the data file.
         Also restore the collection's update schedule to the default (daily at noon).
 
-    .PARAMETER Collections
-        If specified, also creates corresponding location and type collections.
+    .PARAMETER ProcessBoundaries
+        If specified, creates boundaries and boundary groups.
+
+    .PARAMETER ProcessCollections
+        If specified, creates location and type collections.
 
     .PARAMETER FolderName
         The Admin Console subfolder to place the created device collections in (under Device Collections). 
@@ -43,14 +46,18 @@
         Creates boundaries and boundary groups defined in the data2.csv data file.
 		
 	.NOTES
-		Version 2.4
+		Version 2.5
         Jason Sandys
 
         Version History
+        - 2.5 (2 February 2020)
+            - Updated collection membership rule to use a single query that specifies all gateways
+            - Added option to process only boundaries and boundary groups (ProcessBoundaries)
+            - Renamed Collection option to ProcessCollections
         - 2.41 (1 February 2020) 
             - Updated to change the collection update schedule back to the schedule defined here in the script
               if the -Restore option is specified.
-            - Update to only set comments on new collections or is the -Restore option is specified.
+            - Updated to only set comments on new collections or is the -Restore option if specified.
         - 2.4 (29 January 2020)
             - Updated to read IP gateway from the configuration CSV
             - Updated to separately and selectively create boundary groups and collections
@@ -95,37 +102,49 @@
 [CmdletBinding()]
 param
 (
-	[Parameter(ParameterSetName='No Collections', HelpMessage = 'The data file to use.')]
-    [Parameter(ParameterSetName = "Create Collections")]
+	[Parameter(ParameterSetName='Process Both', HelpMessage = 'The data file to use.')]
+    [Parameter(ParameterSetName = 'Process Collections')]
+    [Parameter(ParameterSetName = 'Process Boundaries')]
 	[ValidateScript({ Test-Path -PathType Leaf -Path $_ })]
 	[Alias('data')]
     [string] $DataFile = '.\data.csv',
 
-    [Parameter(ParameterSetName='No Collections', HelpMessage = 'The prefix to use for boundary and boundary group names.')]
-    [Parameter(ParameterSetName = "Create Collections")]
+    [Parameter(ParameterSetName = 'Process Both', HelpMessage = 'The prefix to use for boundary and boundary group names.')]
+    [Parameter(ParameterSetName = 'Process Collections')]
+    [Parameter(ParameterSetName = 'Process Boundaries')]
     [string] $Prefix = 'Auto: ',
 
-    [Parameter(ParameterSetName='No Collections', HelpMessage = 'Clean up empty boundary groups and collections or non-referenced boundaries.')]
-    [Parameter(ParameterSetName = "Create Collections")]
+    [Parameter(ParameterSetName = 'Process Both', HelpMessage = 'Clean up empty boundary groups and collections or non-referenced boundaries.')]
+    [Parameter(ParameterSetName = 'Process Collections')]
+    [Parameter(ParameterSetName = 'Process Boundaries')]
     [switch] $Cleanup,
 
-	[Parameter(ParameterSetName='No Collections', HelpMessage = 'Forces the cleanup of boundaries and boundary groups even if they contain or are contained in other boundaries or boundary groups.')]
-    [Parameter(ParameterSetName = "Create Collections")]
+    [Parameter(ParameterSetName = 'Process Both', HelpMessage = 'Forces the cleanup of boundaries and boundary groups even if they contain or are contained in other boundaries or boundary groups.')]
+    [Parameter(ParameterSetName = 'Process Collections')]
+    [Parameter(ParameterSetName = 'Process Boundaries')]
     [switch] $ForceCleanup,
 
-    [Parameter(ParameterSetName='No Collections', HelpMessage = 'Restores collections and boundary groups to their data file defined state by
+    [Parameter(ParameterSetName = 'Process Both', HelpMessage = 'Restores collections and boundary groups to their data file defined state by
         removing all collection query rules and boundary group members not defined in the data file.')]
-    [Parameter(ParameterSetName = "Create Collections")]
+    [Parameter(ParameterSetName = 'Process Collections')]
+    [Parameter(ParameterSetName = 'Process Boundaries')]
     [switch] $Restore,
 
-    [Parameter(ParameterSetName='Create Collections', Mandatory=$true, HelpMessage = 'If specified, also creates collections.')]
-    [switch] $Collections,
+    [Parameter(ParameterSetName='Process Boundaries', Mandatory=$true, HelpMessage = 'If specified, creates boundaries and boundary groups.')]
+    [Parameter(ParameterSetName = 'Process Both', Mandatory = $true)]
+    [switch] $ProcessBoundaries,
+
+    [Parameter(ParameterSetName='Process Collections', Mandatory=$true, HelpMessage = 'If specified, creates collections.')]
+    [Parameter(ParameterSetName = 'Process Both', Mandatory = $true)]
+    [switch] $ProcessCollections,
     
-    [Parameter(ParameterSetName='Create Collections', Mandatory=$true, HelpMessage = 'The folder to place the created collections in. The folder specified will be created in it does not exist.')]
+    [Parameter(ParameterSetName = 'Process Collections', Mandatory = $true, HelpMessage = 'The folder to place the created collections in. The folder specified will be created in it does not exist.')]
+    [Parameter(ParameterSetName = 'Process Both', Mandatory = $true)]
     [Alias('folder')]
     [string] $FolderName,
 
-    [Parameter(ParameterSetName='Create Collections', HelpMessage = 'The collection ID of the collection to limit the created collections to.')]
+    [Parameter(ParameterSetName = 'Process Collections', HelpMessage = 'The collection ID of the collection to limit the created collections to.')]
+    [Parameter(ParameterSetName = 'Process Both')]
     [string] $LimitingCollectionID = 'SMS00001',
 
     [Parameter(ParameterSetName='Test', Mandatory=$true, HelpMessage = 'If specified, read the data file only looking forparsing issues, overlaps, or missing data.')]
@@ -698,7 +717,7 @@ function Add-BoundaryGroupQueryRuleToCollection
         }
     }
 }
-function Add-IPGatewayQueryRulesToCollection
+function Add-IPGatewayQueryRuleToCollection
 {
 	[CmdletBinding()]
 	param
@@ -710,36 +729,39 @@ function Add-IPGatewayQueryRulesToCollection
 	)
 
     $currentRules = (Get-CMDeviceCollectionQueryMembershipRule -CollectionId $Collection.CollectionID).RuleName
+    $ruleName = "${Prefix}Gateways for $($Collection.Name)"
 
-    $categorySubnets = $Item.Value -split ','
-    $gateways = New-Object -TypeName "System.Collections.ArrayList"
-
-    foreach ($subnet in $categorySubnets)
+    if ($currentRules -notcontains $ruleName)
     {
-        $gatewayIP = ($AllSubnets.$subnet).Gateway
-        $gateways.Add($gatewayIP) | Out-Null
+        $categorySubnets = $Item.Value -split ','
+        $gateways = New-Object -TypeName "System.Collections.ArrayList"
 
-        if ($currentRules -notcontains $gatewayIP)
+        foreach ($subnet in $categorySubnets)
         {
-            Write-Host "   + Adding query rule for gateway with an IP of '$gatewayIP'"
-
-            # $gatewayIP is referenced in $config_GatewayQueryTemplate
-            $queryRule = $ExecutionContext.InvokeCommand.ExpandString($config_GatewayQueryTemplate)
-
-                Add-CMDeviceCollectionQueryMembershipRule `
-                    -CollectionId $Collection.CollectionID `
-                    -RuleName $gatewayIP `
-                    -QueryExpression $queryRule
+            $gatewayIP = ($AllSubnets.$subnet).Gateway
+            $gateways.Add($gatewayIP) | Out-Null
         }
-        else
-        {
-            Write-Host "   = Query rule for gateway with an IP of '$gatewayIP' already exists" 
-        }
+
+        $gatewayList = '"' + ($gateways -join '","') + '"'
+            
+        Write-Host "   + Adding query rule for the following list of gateway IPs: $gatewayList"
+
+        # $gatewayIP is referenced in $config_GatewayQueryTemplate
+        $queryRule = $ExecutionContext.InvokeCommand.ExpandString($config_GatewayQueryTemplate)
+
+            Add-CMDeviceCollectionQueryMembershipRule `
+                -CollectionId $Collection.CollectionID `
+                -RuleName $ruleName `
+                -QueryExpression $queryRule
+    }
+    else
+    {
+        Write-Host "   = Query rule for gateways already exists" 
     }
 
     foreach ($rule in $currentRules)
     {
-        if ($gateways -notcontains $rule)
+        if ($rule -ne $ruleName)
         {
             if($Restore)
             {
@@ -898,7 +920,7 @@ $config_CollectionCategoryNames = @('Location','Type')
 $config_AdditionalColumns = 'SiteSystems','SubnetAddresses','Gateway'
 $config_ColumnFilters = @{'Type' = '("$value" -split "/")[0]'}
 $config_BoundaryGroupQueryTemplate = 'select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client, SMS_G_System_BOUNDARYGROUPCACHE.BoundaryGroupIDs from  SMS_R_System inner join SMS_G_System_BOUNDARYGROUPCACHE on SMS_G_System_BOUNDARYGROUPCACHE.ResourceID = SMS_R_System.ResourceId where SMS_G_System_BOUNDARYGROUPCACHE.BoundaryGroupIDs like "%$boundaryGroupID%"'
-$config_GatewayQueryTemplate = 'select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from  SMS_R_System inner join SMS_G_System_NETWORK_ADAPTER_CONFIGURATION on SMS_G_System_NETWORK_ADAPTER_CONFIGURATION.ResourceId = SMS_R_System.ResourceId where SMS_G_System_NETWORK_ADAPTER_CONFIGURATION.DefaultIPGateway like "%$gatewayIP%"'
+$config_GatewayQueryTemplate = 'select SMS_R_System.ResourceId, SMS_R_System.ResourceType, SMS_R_System.Name, SMS_R_System.SMSUniqueIdentifier, SMS_R_System.ResourceDomainORWorkgroup, SMS_R_System.Client from  SMS_R_System inner join SMS_G_System_NETWORK_ADAPTER_CONFIGURATION on SMS_G_System_NETWORK_ADAPTER_CONFIGURATION.ResourceId = SMS_R_System.ResourceId where SMS_G_System_NETWORK_ADAPTER_CONFIGURATION.DefaultIPGateway in ($gatewayList)'
 $config_CommentsByCategory = @{'Location' = '$Type ($Gateway)'}
 $config_CommentSeperator = ', '
 $config_BlankColumnsOK = @('SiteSystems')
@@ -941,29 +963,32 @@ if($TestParse)
 
 Push-Location $siteCode":"
 
-Write-Host ""
-Write-Host "Processing boundaries from subnets ..."
-$subnets.GetEnumerator() | ForEach-Object { $subnetItem = $_; New-Boundary -Subnet $subnetItem  } `
- | ForEach-Object { $boundaries.Add($subnetItem.Value.CIDRNotation, $_) }
-
-foreach($category in $config_boundaryGroupCategoryNames)
+if ($ProcessBoundaries)
 {
     Write-Host ""
-    Write-Host "Processing boundary groups based on $category ..."
-    ($allCategories.$category).GetEnumerator() `
-     | New-BoundaryGroup -BoundaryGroupCategory $category -Boundaries $boundaries -SiteSystems $siteSystems.$category `
-     | ForEach-Object { $boundaryGroups.Add($_.Name, $_) }
+    Write-Host "Processing boundaries from subnets ..."
+    $subnets.GetEnumerator() | ForEach-Object { $subnetItem = $_; New-Boundary -Subnet $subnetItem  } `
+    | ForEach-Object { $boundaries.Add($subnetItem.Value.CIDRNotation, $_) }
+
+    foreach($category in $config_boundaryGroupCategoryNames)
+    {
+        Write-Host ""
+        Write-Host "Processing boundary groups based on $category ..."
+        ($allCategories.$category).GetEnumerator() `
+        | New-BoundaryGroup -BoundaryGroupCategory $category -Boundaries $boundaries -SiteSystems $siteSystems.$category `
+        | ForEach-Object { $boundaryGroups.Add($_.Name, $_) }
+    }
+
+    Write-Host ""
+    Write-Host "Checking for stale boundary groups ..."
+    Invoke-BoundaryGroupCheck -BoundaryGroups $boundaryGroups -Clean:$Cleanup -ForceClean:$ForceCleanup
+
+    Write-Host ""
+    Write-Host "Checking for stale boundaries ..."
+    Invoke-BoundaryCheck -Subnets $subnets -Clean:$Cleanup -ForceClean:$ForceCleanup
 }
 
-Write-Host ""
-Write-Host "Checking for stale boundary groups ..."
-Invoke-BoundaryGroupCheck -BoundaryGroups $boundaryGroups -Clean:$Cleanup -ForceClean:$ForceCleanup
-
-Write-Host ""
-Write-Host "Checking for stale boundaries ..."
-Invoke-BoundaryCheck -Subnets $subnets -Clean:$Cleanup -ForceClean:$ForceCleanup
-
-if($Collections)
+if ($ProcessCollections)
 {
     $categoryCollectionFolders = @{}
 
@@ -991,7 +1016,7 @@ if($Collections)
              | ForEach-Object { $categoryItem = $_; New-Collection -Item $categoryItem -ItemType $collectionCategory `
              -Comments $collectionComments.$collectionCategory.($_.Name) `
              | Move-Collection -ConsoleFolder $categoryCollectionFolders.$collectionCategory `
-              | Add-IPGatewayQueryRulesToCollection -AllSubnets $subnets -Item $categoryItem
+              | Add-IPGatewayQueryRuleToCollection -AllSubnets $subnets -Item $categoryItem
              #| Add-BoundaryGroupQueryRuleToCollection -BoundaryGroup $boundaryGroups.Item($boundaryGroupName)
              }
         }
