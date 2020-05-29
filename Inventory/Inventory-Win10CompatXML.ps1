@@ -36,7 +36,7 @@ param
 	[ValidateScript({ Test-Path -PathType Container -Path $_ })]
     [string] $Folder = 'C:\$WINDOWS.~BT\Sources\Panther\',
     [Parameter(Mandatory=$false)]
-        [string] $Namespace = 'IGT',
+        [string] $Namespace = 'IT_Local',
     [Parameter(Mandatory=$false)]
         [string] $ClassPrefix = 'Win10_'
 )
