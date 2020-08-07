@@ -1,6 +1,6 @@
 Option Explicit
 
-Const CUSTOM_NAMESPACE = 	"ITLocal"
+Const CUSTOM_NAMESPACE = 	"UserLocal"
 Const DATA_CLASS = 			"Outlook_Configuration"
 Dim FOLDERS
 
@@ -11,7 +11,6 @@ Const wbemCimtypeReal32 = 4
 Const wbemCimtypeBoolean = 11
 
 const HKEY_USERS = &H80000003
-const HKEY-LOCAL_MACHINE = &H80000002
 
 Dim g_WshShell
 Dim g_fso
@@ -26,48 +25,43 @@ Sub Main
 	Dim namespace, dataClass
 	Dim registry
 	Dim scriptPath
-	Dim userProfilesPath, userProfilesFolder, profileFolder
+	Dim userProfilesPath, userProfilesFolder
 	Dim regCommandLine, returnValue, profilePath
 	Dim outlookProfilesKey, outlookProfiles, outlookProfile, outlookConfigs, outlookConfig
 		
 	scriptPath = Replace(WScript.ScriptFullName, WScript.ScriptName, "")
 
 	Set argsNamed = WScript.Arguments.Named
-
+	
 	Set registry = GetObject("winmgmts:{impersonationLevel=impersonate}!\\.\root\default:StdRegProv") 
 	
-	returnValue = registry.EnumKey(HKEY_USERS, outlookProfilesKey, outlookProfiles)
-	WScript.Echo "****" & returnValue
+	'registry.EnumKey HKEY_USERS, outlookProfilesKey, outlookProfiles
 	
-	If returnValue = 0 Then
+	'For Each outlookProfile in outlookProfiles
+	
+	'	registry.EnumKey HKEY_USERS, outlookProfilesKey & "\" & outlookProfile, outlookConfigs
 		
-		For Each outlookProfile in outlookProfiles
+	'	For Each outlookConfig in outlookConfigs
 		
-			registry.EnumKey HKEY_USERS, outlookProfilesKey & "\" & outlookProfile, outlookConfigs
-			WScript.Echo outlookProfile
+	'	Next
+	
+	'Next
 			
-			For Each outlookConfig in outlookConfigs
-				WScript.Echo "..." & outlookConfigs
-			
-			Next
-		
-		Next
-	End If
-				
-	'If GetNamespace(namespace) = True Then
-	'	If GetDataClass(dataClass, namespace) Then
-			
+	If GetNamespace(namespace) = True Then
+		If GetDataClass(dataClass, namespace) Then
+			WScript.Echo "OK"
 
 				'UpdateDataObject folderPath, GetFolderSize(folderPath), dataClass, namespace
 	'		Next
-	'	End If
-	'End If
+		End If
+	End If
 			
 End Sub
 
 Function GetNamespace(ByRef localNamespace)
 	Dim locator
 	Dim rootNamespace, topNamespace
+	Dim securityDescriptor, acl, result
 		
 	GetNamespace = False
 
@@ -139,6 +133,11 @@ Function GetNamespace(ByRef localNamespace)
 	End If
 
 	On Error GoTo 0
+	
+	securityDescriptor = array(1, 0, 4, 129, 132, 0, 0, 0, 148, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 2, 0, 112, 0, 5, 0, 0, 0, 0, 0, 20, 0, 8, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 5, 11, 0, 0, 0, 0, 18, 24, 0, 63, 0, 6, 0, 1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 32, 2, 0, 0, 0, 18, 20, 0, 19, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 5, 20, 0, 0, 0, 0, 18, 20, 0, 19, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 5, 19, 0, 0, 0, 0, 18, 20, 0, 19, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 5, 11, 0, 0, 0, 1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 32, 2, 0, 0, 1, 2, 0, 0, 0, 0, 0, 5, 32, 0, 0, 0, 32, 2, 0, 0)
+	set acl = localNamespace.get("__systemsecurity=@")
+	result = acl.setsd(securityDescriptor)	
+	
 	GetNamespace = True
 	
 End Function
@@ -214,10 +213,11 @@ Function GetDataClass(ByRef dc, ByRef ns)
 
 			dc.Path_.Class = DATA_CLASS
 			dc.Properties_.Add "UserName", wbemCimtypeString
-			dc.Properties_.Add "OutlookProfileName", wbemCimtypeString
 			dc.Properties_.Add "CachedModeEnabled", wbemCimtypeBoolean
+			dc.Properties_.Add "CachedModeConfig", wbemCimtypeString
+			dc.Properties_.Add "CachedModeConfigValue", wbemCimtypeString
 			dc.Properties_("UserName").Qualifiers_.add "key", True
-			dc.Properties_("OutlookProfileName").Qualifiers_.add "key", True
+			dc.Properties_("CachedModeConfig").Qualifiers_.add "key", True
 				
 			On Error Resume Next
 			Err.Clear
